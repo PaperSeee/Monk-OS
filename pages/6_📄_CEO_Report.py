@@ -85,7 +85,12 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
     try:
         from fpdf import FPDF
 
+        # Helvetica ne supporte pas €  → on remplace par EUR dans le PDF uniquement
+        def pdf_safe(text: str) -> str:
+            return str(text).replace("€", "EUR").encode("latin-1", errors="replace").decode("latin-1")
+
         class MONKPDF(FPDF):
+
             def header(self):
                 self.set_fill_color(13, 15, 20)
                 self.rect(0, 0, 210, 297, 'F')
@@ -102,14 +107,14 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
                 self.set_font("Helvetica", "", 8)
                 self.set_text_color(74, 85, 104)
                 self.set_y(7)
-                self.cell(0, 10, f"Monthly CEO Report · {today_str}", align="R")
+                self.cell(0, 10, pdf_safe(f"Monthly CEO Report - {today_str}"), align="R")
                 self.ln(20)
 
             def footer(self):
                 self.set_y(-12)
                 self.set_font("Helvetica", "", 7)
                 self.set_text_color(45, 52, 71)
-                self.cell(0, 10, f"MONK-OS V2 · Données privées · {tz_name}", align="L")
+                self.cell(0, 10, pdf_safe(f"MONK-OS V2 - Donnees privees - {tz_name}"), align="L")
                 self.cell(0, 10, f"Page {self.page_no()}", align="R")
 
         def h2(pdf, text):
@@ -117,7 +122,7 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
             pdf.set_text_color(59, 130, 246)
             pdf.set_fill_color(22, 26, 34)
             pdf.rect(pdf.get_x(), pdf.get_y(), 180, 7, 'F')
-            pdf.cell(0, 7, f"  {text.upper()}", ln=True)
+            pdf.cell(0, 7, pdf_safe(f"  {text.upper()}"), ln=True)
             pdf.set_fill_color(59, 130, 246)
             pdf.rect(10, pdf.get_y(), 180, 0.5, 'F')
             pdf.ln(4)
@@ -125,10 +130,10 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
         def row(pdf, label, value, value_color=(240, 244, 255)):
             pdf.set_font("Helvetica", "", 9)
             pdf.set_text_color(136, 146, 170)
-            pdf.cell(80, 6, label, ln=False)
+            pdf.cell(80, 6, pdf_safe(label), ln=False)
             pdf.set_font("Helvetica", "B", 9)
             pdf.set_text_color(*value_color)
-            pdf.cell(0, 6, str(value), ln=True)
+            pdf.cell(0, 6, pdf_safe(str(value)), ln=True)
 
         # ── Build PDF ─────────────────────────────────────────────────────
         pdf = MONKPDF(orientation="P", unit="mm", format="A4")
@@ -144,7 +149,7 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
         sz = "24" if len(fmt(net_worth, ccy, rates)) < 12 else "18"
         pdf.set_font("Helvetica", "B", int(sz))
         pdf.set_text_color(59, 130, 246)
-        pdf.cell(0, 10, fmt(net_worth, ccy, rates), ln=True)
+        pdf.cell(0, 10, pdf_safe(fmt(net_worth, ccy, rates)), ln=True)
         pdf.ln(3)
 
         col1_x = 10
@@ -154,15 +159,15 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
             pdf.set_font("Helvetica", "", 7)
             pdf.set_text_color(74, 85, 104)
             pdf.set_x(col1_x)
-            pdf.cell(90, 4, label1.upper(), ln=False)
+            pdf.cell(90, 4, pdf_safe(label1.upper()), ln=False)
             pdf.set_x(col2_x)
-            pdf.cell(90, 4, label2.upper(), ln=True)
+            pdf.cell(90, 4, pdf_safe(label2.upper()), ln=True)
             pdf.set_font("Helvetica", "B", 11)
             pdf.set_text_color(240, 244, 255)
             pdf.set_x(col1_x)
-            pdf.cell(90, 7, str(val1), ln=False)
+            pdf.cell(90, 7, pdf_safe(str(val1)), ln=False)
             pdf.set_x(col2_x)
-            pdf.cell(90, 7, str(val2), ln=True)
+            pdf.cell(90, 7, pdf_safe(str(val2)), ln=True)
             pdf.ln(3)
 
         two_col_metric(pdf,
@@ -222,7 +227,7 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
             pdf.set_font("Helvetica", "B", 9)
             pdf.set_text_color(59, 130, 246)
             pdf.cell(105, 5.5, "TOTAL")
-            pdf.cell(40, 5.5, fmt(total_portfolio, ccy, rates), align="R")
+            pdf.cell(40, 5.5, pdf_safe(fmt(total_portfolio, ccy, rates)), align="R")
             pdf.ln()
 
         # ── Dividends ─────────────────────────────────────────────────────
@@ -230,7 +235,7 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
             pdf.ln(3)
             h2(pdf, "Dividend Tracker (théorique)")
             row(pdf, "Dividendes annuels estimés", fmt(total_annual_div, ccy, rates), (16, 185, 129))
-            row(pdf, "Dividendes mensuels estimés", fmt(total_annual_div / 12, ccy, rates), (16, 185, 129))
+            row(pdf, "Dividendes mensuels estimes", fmt(total_annual_div / 12, ccy, rates), (16, 185, 129))
             pdf.set_font("Helvetica", "I", 7)
             pdf.set_text_color(74, 85, 104)
             pdf.multi_cell(0, 4, "Note: Ces ETFs sont ACC (accumulants). Ces chiffres representent la croissance implicite reinvestie dans le prix de part.")
@@ -251,7 +256,7 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
         pdf.ln(6)
         pdf.set_font("Helvetica", "I", 7)
         pdf.set_text_color(45, 52, 71)
-        pdf.multi_cell(0, 4, f"Généré le {today_str} · MONK-OS V2 CEO Terminal · Données 100% privées sur Mac.")
+        pdf.multi_cell(0, 4, pdf_safe(f"Genere le {today_str} - MONK-OS V2 CEO Terminal - Donnees 100% privees sur Mac."))
 
         # ── Output ─────────────────────────────────────────────────────────
         pdf_bytes = bytes(pdf.output())
