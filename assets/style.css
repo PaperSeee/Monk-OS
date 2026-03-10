@@ -42,6 +42,22 @@ html, body, [class*="css"] {
   max-width: 1400px;
 }
 
+/* ── HIDE STREAMLIT CHROME (BUT KEEP SIDEBAR TOGGLE) ── */
+#MainMenu { visibility: hidden !important; }
+header { background: transparent !important; }
+header .stAppDeployButton { display: none !important; }
+header [data-testid="stToolbar"] { display: none !important; }
+footer { visibility: hidden !important; }
+[data-testid="stDecoration"] { display: none !important; }
+
+/* Garder le bouton "Ouvrir sidebar" visible et bien stylé */
+[data-testid="collapsedControl"] { 
+  display: flex !important; 
+  visibility: visible !important;
+  color: var(--text-primary) !important;
+  z-index: 1000 !important;
+}
+
 /* ── SIDEBAR ── */
 [data-testid="stSidebar"] {
   background: var(--bg-secondary) !important;
