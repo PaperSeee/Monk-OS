@@ -140,22 +140,24 @@ ccy_sym = CURRENCY_SYMBOLS.get(st.session_state.currency, "€")
 
 cols = st.columns(5)
 modules = [
-    ("🏰", "Fortress One",     "Dashboard Épargne",        "#3B82F6"),
-    ("📈", "Equity Engine",    "ETF Multi-Position V2",    "#10B981"),
-    ("🔮", "Freedom Sim",      "Projections 20 ans",       "#8B5CF6"),
-    ("🛡️", "Sentinel",         "Anti-Tilt & Discipline",  "#F59E0B"),
-    ("📄", "CEO Report",       "PDF Monthly Report",       "#EC4899"),
+    ("Fortress_One", "🏰", "Fortress One",     "Dashboard Épargne",        "#3B82F6"),
+    ("Equity_Engine", "📈", "Equity Engine",    "ETF Multi-Position V2",    "#10B981"),
+    ("Freedom_Simulator", "🔮", "Freedom Sim",      "Projections 20 ans",       "#8B5CF6"),
+    ("Sentinel", "🛡️", "Sentinel",         "Anti-Tilt & Discipline",  "#F59E0B"),
+    ("CEO_Report", "📄", "CEO Report",       "PDF Monthly Report",       "#EC4899"),
 ]
-for col, (icon, name, desc, color) in zip(cols, modules):
+for col, (url, icon, name, desc, color) in zip(cols, modules):
     with col:
         st.markdown(f"""
-        <div class="monk-card" style="text-align:center; cursor:pointer; padding:1.5rem 0.8rem;">
-            <div style="font-size:1.8rem; margin-bottom:0.7rem;">{icon}</div>
-            <div style="font-size:0.72rem; color:{color}; letter-spacing:0.06em;
-                        text-transform:uppercase; font-weight:700;
-                        font-family:'Inter',sans-serif;">{name}</div>
-            <div style="font-size:0.67rem; color:#4A5568; margin-top:0.35rem;">{desc}</div>
-        </div>
+        <a href="{url}" target="_self" style="text-decoration:none;">
+            <div class="monk-card" style="text-align:center; cursor:pointer; padding:1.5rem 0.8rem; height:100%;">
+                <div style="font-size:1.8rem; margin-bottom:0.7rem;">{icon}</div>
+                <div style="font-size:0.72rem; color:{color}; letter-spacing:0.06em;
+                            text-transform:uppercase; font-weight:700;
+                            font-family:'Inter',sans-serif;">{name}</div>
+                <div style="font-size:0.67rem; color:#4A5568; margin-top:0.35rem;">{desc}</div>
+            </div>
+        </a>
         """, unsafe_allow_html=True)
 
 # Current currency pill

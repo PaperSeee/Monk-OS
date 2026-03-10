@@ -43,20 +43,10 @@ html, body, [class*="css"] {
 }
 
 /* ── HIDE STREAMLIT CHROME (BUT KEEP SIDEBAR TOGGLE) ── */
-#MainMenu { visibility: hidden !important; }
-header { background: transparent !important; }
-header .stAppDeployButton { display: none !important; }
-header [data-testid="stToolbar"] { display: none !important; }
-footer { visibility: hidden !important; }
+#MainMenu { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
-
-/* Garder le bouton "Ouvrir sidebar" visible et bien stylé */
-[data-testid="collapsedControl"] { 
-  display: flex !important; 
-  visibility: visible !important;
-  color: var(--text-primary) !important;
-  z-index: 1000 !important;
-}
+footer { display: none !important; }
 
 /* ── SIDEBAR ── */
 [data-testid="stSidebar"] {
