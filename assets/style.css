@@ -42,11 +42,14 @@ html, body, [class*="css"] {
   max-width: 1400px;
 }
 
-/* ── HIDE STREAMLIT CHROME (BUT KEEP SIDEBAR TOGGLE) ── */
-#MainMenu { display: none !important; }
-[data-testid="stToolbar"] { display: none !important; }
+/* ── HIDE STREAMLIT CHROME ── */
+/* Ne pas cacher stToolbar globalement : il contient le bouton sidebar collapsée ! */
+[data-testid="stToolbarActions"] { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
+[data-testid="stStatusWidget"] { display: none !important; }
+.stDeployButton { display: none !important; }
 footer { display: none !important; }
+#MainMenu { display: none !important; }
 
 /* ── SIDEBAR ── */
 [data-testid="stSidebar"] {
