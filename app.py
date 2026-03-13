@@ -1,20 +1,30 @@
 """
-MONK-OS V2: CEO Terminal
-Main entry point — page config, CSS injection, sidebar with currency/timezone, live clock.
+MONK-OS V3: Life & Wealth OS — CENTRAL DASHBOARD
+Home page: aggregates all KPI from LT / MT / CT with navigation buttons.
+Each pillar (LT/MT/CT) is a full standalone app accessible via pages.
 """
 
 import streamlit as st
+import pandas as pd
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from db.database import init_db, get_setting, set_setting
-from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str
+from db.database import (
+    init_db,
+    get_setting,
+    set_setting,
+    get_lt_capital,
+    get_prop_challenges,
+    get_business_tests,
+    get_total_payouts,
+)
+from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, fmt, get_fx_rates
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="MONK-OS : CEO Terminal",
+    page_title="MONK-OS : Life & Wealth OS — Dashboard Central",
     page_icon="▣",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -40,7 +50,7 @@ with st.sidebar:
         </div>
         <div style="font-size:0.58rem; color:#4A5568; letter-spacing:0.3em;
                     text-transform:uppercase; margin-top:0.3rem;">
-            CEO Terminal · V2.0
+            Life & Wealth OS · V3.0
         </div>
         <div style="margin-top:0.8rem;">
             <span style="background:#1E3A5F; color:#3B82F6; padding:0.2rem 0.7rem;
@@ -98,17 +108,19 @@ with st.sidebar:
         set_setting("preferred_timezone", new_tz)
         st.rerun()
 
-# ── MAIN PAGE HEADER with live clock ────────────────────────────────────────
+# ── MAIN PAGE HEADER ────────────────────────────────────────────────────────
 date_str, time_str = get_now_str(st.session_state.timezone)
+r = get_fx_rates() if st.session_state.currency != "EUR" else {"EUR": 1.0}
+ccy = st.session_state.currency
+ccy_sym = CURRENCY_SYMBOLS.get(ccy, "€")
 
-# Top-right datetime display
 col_title, col_clock = st.columns([3, 1])
 with col_title:
     st.markdown("""
     <div style="padding-top:0.5rem;">
         <div style="font-size:0.65rem; color:#3B82F6; letter-spacing:0.4em;
                     text-transform:uppercase; margin-bottom:0.5rem; font-weight:600;">
-            Système opérationnel
+            Dashboard Central
         </div>
         <div style="font-size:3rem; font-weight:800; color:#F0F4FF;
                     letter-spacing:-0.04em; line-height:1.0;
@@ -117,13 +129,12 @@ with col_title:
         </div>
         <div style="font-size:0.85rem; color:#8892AA; letter-spacing:0.3em;
                     text-transform:uppercase; margin-top:0.4rem;">
-            CEO Terminal · V2.0
+            Life & Wealth OS — Synthèse
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 with col_clock:
-    tz_label = selected_tz_name.split(" ")[-1].upper()
     st.markdown(f"""
     <div class="datetime-widget" style="padding-top:0.8rem;">
         <div class="datetime-time">{time_str}</div>
@@ -135,38 +146,148 @@ with col_clock:
 st.markdown("<div style='margin:1rem 0; width:60px; height:3px; background:#3B82F6; border-radius:2px;'></div>",
             unsafe_allow_html=True)
 
-# ── Module grid ──────────────────────────────────────────────────────────────
-ccy_sym = CURRENCY_SYMBOLS.get(st.session_state.currency, "€")
+# ── LOAD AGGREGATED DATA FROM ALL 3 PILLARS ───────────────────────────────
+lt_capital = get_lt_capital()
+challenges = get_prop_challenges()
+tests = get_business_tests()
 
-cols = st.columns(5)
-modules = [
-    ("Fortress_One", "🏰", "Fortress One",     "Dashboard Épargne",        "#3B82F6"),
-    ("Equity_Engine", "📈", "Equity Engine",    "ETF Multi-Position V2",    "#10B981"),
-    ("Freedom_Simulator", "🔮", "Freedom Sim",      "Projections 20 ans",       "#8B5CF6"),
-    ("Sentinel", "🛡️", "Sentinel",         "Anti-Tilt & Discipline",  "#F59E0B"),
-    ("CEO_Report", "📄", "CEO Report",       "PDF Monthly Report",       "#EC4899"),
-]
-for col, (url, icon, name, desc, color) in zip(cols, modules):
-    with col:
-        st.markdown(f"""
-        <a href="{url}" target="_self" style="text-decoration:none;">
-            <div class="monk-card" style="text-align:center; cursor:pointer; padding:1.5rem 0.8rem; height:100%;">
-                <div style="font-size:1.8rem; margin-bottom:0.7rem;">{icon}</div>
-                <div style="font-size:0.72rem; color:{color}; letter-spacing:0.06em;
-                            text-transform:uppercase; font-weight:700;
-                            font-family:'Inter',sans-serif;">{name}</div>
-                <div style="font-size:0.67rem; color:#4A5568; margin-top:0.35rem;">{desc}</div>
+total_challenge_cost = sum(float(c.get("price", 0) or 0) for c in challenges)
+total_payouts = sum(get_total_payouts(c['id']) for c in challenges)
+total_allocated_budget = sum(float(t.get("allocated_budget", 0) or 0) for t in tests)
+total_cash_burn = sum(float(t.get("cash_burn", 0) or 0) for t in tests)
+funded_live = sum(
+    float(c.get("account_size", 0) or 0)
+    for c in challenges
+    if c.get("status") in ["En cours", "Passé"]
+)
+
+inv_bourse = float(get_setting("lt_invest_bourse", "0"))
+inv_crypto = float(get_setting("lt_invest_crypto", "0"))
+inv_immo = float(get_setting("lt_invest_immo", "0"))
+total_invest = inv_bourse + inv_crypto + inv_immo
+
+# ── CENTRAL KPI GRID ────────────────────────────────────────────────────────
+st.markdown("""
+<div style="font-size:0.62rem; color:#4A5568; letter-spacing:0.2em;
+            text-transform:uppercase; margin-bottom:1rem; font-weight:500;">
+    ▸ KPI CONSOLIDÉS
+</div>
+""", unsafe_allow_html=True)
+
+kpi_cols = st.columns(4)
+kpi_cols[0].metric("💎 Capital Global (LT)", fmt(lt_capital, ccy, r))
+kpi_cols[1].metric("🚀 Funded (MT)", fmt(funded_live, ccy, r))
+kpi_cols[2].metric("📊 Budget alloué (CT)", fmt(total_allocated_budget, ccy, r))
+kpi_cols[3].metric("📉 Cash Burn total", fmt(total_cash_burn, ccy, r))
+
+st.divider()
+
+# ── NAVIGATION CARDS BY PILLAR ───────────────────────────────────────────────
+st.markdown("""
+<div style="font-size:0.62rem; color:#4A5568; letter-spacing:0.2em;
+            text-transform:uppercase; margin-bottom:1rem; font-weight:500;">
+    ▸ ACCÉDER AUX APPLICATIONS
+</div>
+""", unsafe_allow_html=True)
+
+nav_cols = st.columns(3)
+
+# LT Card
+with nav_cols[0]:
+    st.markdown(f"""
+    <div class="monk-card" style="text-align:center; padding:1.5rem 1rem; min-height:220px; display:flex; flex-direction:column; justify-content:space-between;">
+        <div>
+            <div style="font-size:2rem; margin-bottom:0.8rem;">🏰</div>
+            <div style="font-size:0.68rem; color:#8892AA; margin-bottom:1rem;">
+                Épargne & Investissement
             </div>
-        </a>
-        """, unsafe_allow_html=True)
+            <div style="font-size:0.85rem; color:#F0F4FF; font-weight:700; font-family:'JetBrains Mono',monospace; margin-bottom:0.6rem;">
+                {fmt(lt_capital, ccy, r)}
+            </div>
+            <hr style="border-color:#232836; margin:0.5rem 0;">
+            <div style="font-size:0.65rem; color:#8892AA;">
+                ETF: {fmt(total_invest, ccy, r)}
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("Ouvrir", key="btn_lt", use_container_width=True):
+        st.switch_page("pages/1_LT_Epargne.py")
 
-# Current currency pill
+# MT Card
+with nav_cols[1]:
+    st.markdown(f"""
+    <div class="monk-card" style="text-align:center; padding:1.5rem 1rem; min-height:220px; display:flex; flex-direction:column; justify-content:space-between;">
+        <div>
+            <div style="font-size:2rem; margin-bottom:0.8rem;">📈</div>
+            <div style="font-size:0.68rem; color:#8892AA; margin-bottom:1rem;">
+                Trading & Prop Firms
+            </div>
+            <div style="font-size:0.85rem; color:#F0F4FF; font-weight:700; font-family:'JetBrains Mono',monospace; margin-bottom:0.6rem;">
+                {fmt(funded_live, ccy, r)}
+            </div>
+            <hr style="border-color:#232836; margin:0.5rem 0;">
+            <div style="font-size:0.65rem; color:#8892AA;">
+                Payouts: {fmt(total_payouts, ccy, r)}
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("Ouvrir", key="btn_mt", use_container_width=True):
+        st.switch_page("pages/2_MT_Trading.py")
+
+# CT Card
+with nav_cols[2]:
+    st.markdown(f"""
+    <div class="monk-card" style="text-align:center; padding:1.5rem 1rem; min-height:220px; display:flex; flex-direction:column; justify-content:space-between;">
+        <div>
+            <div style="font-size:2rem; margin-bottom:0.8rem;">🔮</div>
+            <div style="font-size:0.68rem; color:#8892AA; margin-bottom:1rem;">
+                Business & Tests
+            </div>
+            <div style="font-size:0.85rem; color:#F0F4FF; font-weight:700; font-family:'JetBrains Mono',monospace; margin-bottom:0.6rem;">
+                {len(tests)} tests
+            </div>
+            <hr style="border-color:#232836; margin:0.5rem 0;">
+            <div style="font-size:0.65rem; color:#8892AA;">
+                Burn: {fmt(total_cash_burn, ccy, r)}
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("Ouvrir", key="btn_ct", use_container_width=True):
+        st.switch_page("pages/3_CT_Business.py")
+
+st.divider()
+
+# ── FLOW DIAGRAM ────────────────────────────────────────────────────────────
+st.markdown("""
+<div style="font-size:0.62rem; color:#4A5568; letter-spacing:0.2em;
+            text-transform:uppercase; margin-bottom:1rem; font-weight:500;">
+    ▸ INTERCONNEXION DES FLUX
+</div>
+""", unsafe_allow_html=True)
+
+flow_text = f"""
+**LT (Coffre-Fort) ← Source de Vérité**
+- Capital global : {fmt(lt_capital, ccy, r)}
+- Impacté par : Challenges achetés en MT, allocations budgétaires CT, payouts MT
+
+**MT (Levier) → Impacte LT**
+- Nouveaux challenges : déduisent du capital LT
+- Payouts reçus : crédités au capital LT
+
+**CT (Laboratoire) → Impacte LT**
+- Budgets alloués : optionnellement déduits du capital LT
+- Cash burn : tracké et visible dans la synthèse LT
+"""
+
+st.markdown(flow_text)
+
 st.markdown(f"""
-<div style="text-align:center; margin-top:1rem;">
+<div style="text-align:center; margin-top:1.5rem;">
     <span class="stat-pill" style="border-color:#3B82F6; color:#3B82F6;">
-        Devise active : <strong style="margin-left:0.3rem; font-family:'JetBrains Mono',monospace;">
-            {ccy_sym} {st.session_state.currency}
-        </strong>
+        Devise active : <strong style="margin-left:0.3rem; font-family:'JetBrains Mono',monospace;">{ccy_sym} {ccy}</strong>
     </span>
 </div>
 """, unsafe_allow_html=True)

@@ -73,6 +73,44 @@ def init_db():
         )
     """)
 
+    # MT — Prop firm challenges
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS prop_challenges (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at   TEXT NOT NULL,
+            account_size REAL DEFAULT 0,
+            price        REAL DEFAULT 0,
+            status       TEXT DEFAULT 'En cours',
+            is_funded    INTEGER DEFAULT 0,
+            payouts      REAL DEFAULT 0
+        )
+    """)
+
+    # CT — Business tests sandbox
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS business_tests (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at       TEXT NOT NULL,
+            name             TEXT NOT NULL,
+            description      TEXT DEFAULT '',
+            status           TEXT DEFAULT 'To Do',
+            allocated_budget REAL DEFAULT 0,
+            cash_burn        REAL DEFAULT 0
+        )
+    """)
+
+    # MT — Prop payouts history (tracks each payout individually)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS prop_payouts (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            challenge_id   INTEGER NOT NULL,
+            amount         REAL DEFAULT 0,
+            created_at     TEXT NOT NULL,
+            note           TEXT DEFAULT '',
+            FOREIGN KEY (challenge_id) REFERENCES prop_challenges(id)
+        )
+    """)
+
     # Migrate old finances table if month_key column missing
     try:
         c.execute("ALTER TABLE finances ADD COLUMN month_key TEXT")
@@ -98,6 +136,13 @@ def init_db():
     except Exception:
         pass
 
+    # Migrate prop_challenges: add is_funded column if missing
+    try:
+        c.execute("ALTER TABLE prop_challenges ADD COLUMN is_funded INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
+
     conn.commit()
     conn.close()
     _seed_defaults()
@@ -111,11 +156,20 @@ def _seed_defaults():
         "savings_goal":       "2000",
         "monthly_budget":     "1250",
         "current_savings":    "0",
+        "lt_capital":         "0",
         "preferred_currency": "EUR",
         "preferred_timezone": "Europe/Brussels",
     }
     for k, v in defaults.items():
         c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
+
+    # Backward-compat: if LT capital was never set, seed it from current_savings
+    row_lt = c.execute("SELECT value FROM settings WHERE key='lt_capital'").fetchone()
+    if not row_lt or row_lt["value"] in (None, ""):
+        row_s = c.execute("SELECT value FROM settings WHERE key='current_savings'").fetchone()
+        seed_val = row_s["value"] if row_s and row_s["value"] not in (None, "") else "0"
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("lt_capital", seed_val))
+
     conn.commit()
     conn.close()
 
@@ -134,6 +188,28 @@ def set_setting(key: str, value):
     conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
     conn.commit()
     conn.close()
+
+
+def get_lt_capital() -> float:
+    raw = get_setting("lt_capital", None)
+    if raw is None:
+        raw = get_setting("current_savings", "0")
+        set_setting("lt_capital", raw)
+    try:
+        return float(raw)
+    except Exception:
+        return 0.0
+
+
+def set_lt_capital(amount: float):
+    set_setting("lt_capital", amount)
+    set_setting("current_savings", amount)
+
+
+def adjust_lt_capital(delta: float) -> float:
+    new_value = get_lt_capital() + float(delta)
+    set_lt_capital(new_value)
+    return new_value
 
 
 # ── FINANCES ─────────────────────────────────────────────────────────────────
@@ -262,5 +338,154 @@ def get_sentinel_logs(limit=20):
     rows = conn.execute(
         "SELECT * FROM sentinel_log ORDER BY timestamp DESC LIMIT ?", (limit,)
     ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ── PROP CHALLENGES (MT) ─────────────────────────────────────────────────────
+
+def create_prop_challenge(account_size: float, price: float, status: str = "En cours"):
+    conn = get_connection()
+    conn.execute(
+        """
+        INSERT INTO prop_challenges (created_at, account_size, price, status, payouts)
+        VALUES (?, ?, ?, ?, 0)
+        """,
+        (datetime.now().isoformat(), account_size, price, status),
+    )
+    conn.commit()
+    conn.close()
+    adjust_lt_capital(-float(price))
+
+
+def add_prop_payout(challenge_id: int, amount: float, note: str = ""):
+    """Add a payout to a challenge and credit LT capital."""
+    conn = get_connection()
+    conn.execute(
+        """
+        INSERT INTO prop_payouts (challenge_id, amount, created_at, note)
+        VALUES (?, ?, ?, ?)
+        """,
+        (challenge_id, float(amount), datetime.now().isoformat(), note),
+    )
+    conn.commit()
+    conn.close()
+    adjust_lt_capital(float(amount))
+
+
+def get_prop_payouts(challenge_id: int):
+    """Get all payouts for a challenge."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM prop_payouts WHERE challenge_id = ? ORDER BY created_at DESC",
+        (challenge_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_prop_challenge_status(challenge_id: int, status: str):
+    conn = get_connection()
+    conn.execute("UPDATE prop_challenges SET status = ? WHERE id = ?", (status, challenge_id))
+    conn.commit()
+    conn.close()
+
+
+def set_challenge_funded(challenge_id: int, is_funded: bool):
+    conn = get_connection()
+    conn.execute("UPDATE prop_challenges SET is_funded = ? WHERE id = ?", (1 if is_funded else 0, challenge_id))
+    conn.commit()
+    conn.close()
+
+
+def delete_prop_challenge(challenge_id: int):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT price FROM prop_challenges WHERE id = ?", (challenge_id,))
+    row = c.fetchone()
+    if row:
+        refund = float(row[0])
+        c.execute("DELETE FROM prop_challenges WHERE id = ?", (challenge_id,))
+        conn.commit()
+        conn.close()
+        adjust_lt_capital(refund)
+        return refund
+    conn.close()
+    return 0.0
+
+
+def delete_prop_payout(challenge_id: int, payout_id: int, amount: float):
+    """Remove a payout from history and refund to LT capital."""
+    conn = get_connection()
+    conn.execute("DELETE FROM prop_payouts WHERE id = ?", (payout_id,))
+    conn.commit()
+    conn.close()
+    adjust_lt_capital(-float(amount))
+
+
+def get_prop_challenges():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM prop_challenges ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_total_payouts(challenge_id: int):
+    """Get total payout amount for a challenge."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT SUM(amount) as total FROM prop_payouts WHERE challenge_id = ?",
+        (challenge_id,),
+    ).fetchone()
+    conn.close()
+    return float(row["total"] or 0)
+
+
+def get_prop_challenges_by_status(status: str):
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM prop_challenges WHERE status = ? ORDER BY created_at DESC", (status,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ── BUSINESS TESTS (CT) ──────────────────────────────────────────────────────
+
+def create_business_test(name: str, description: str, status: str = "To Do",
+                         allocated_budget: float = 0.0, deduct_from_lt: bool = False):
+    conn = get_connection()
+    conn.execute(
+        """
+        INSERT INTO business_tests (created_at, name, description, status, allocated_budget, cash_burn)
+        VALUES (?, ?, ?, ?, ?, 0)
+        """,
+        (datetime.now().isoformat(), name, description, status, float(allocated_budget)),
+    )
+    conn.commit()
+    conn.close()
+    if deduct_from_lt and allocated_budget > 0:
+        adjust_lt_capital(-float(allocated_budget))
+
+
+def update_business_test_status(test_id: int, status: str):
+    conn = get_connection()
+    conn.execute("UPDATE business_tests SET status = ? WHERE id = ?", (status, test_id))
+    conn.commit()
+    conn.close()
+
+
+def add_business_cash_burn(test_id: int, amount: float, deduct_from_lt: bool = False):
+    conn = get_connection()
+    conn.execute("UPDATE business_tests SET cash_burn = cash_burn + ? WHERE id = ?", (float(amount), test_id))
+    conn.commit()
+    conn.close()
+    if deduct_from_lt and amount > 0:
+        adjust_lt_capital(-float(amount))
+
+
+def get_business_tests():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM business_tests ORDER BY created_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
