@@ -12,11 +12,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from db.database import init_db, get_latest_portfolio_v2, save_portfolio_v2, get_setting
 from utils.helpers import (
     inject_css, section_head, sub_label, plotly_theme,
-    ETF_CATALOG, ETF_YIELD, fmt, get_fx_rates,
+    ETF_CATALOG, ETF_YIELD, fmt, get_fx_rates, render_long_term_sidebar_nav,
+)
+
+st.set_page_config(
+    page_title="MONK-OS : Equity Engine",
+    page_icon="📈",
+    layout="wide",
 )
 
 init_db()
 inject_css()
+render_long_term_sidebar_nav("equity")
 
 import yfinance as yf
 import plotly.graph_objects as go

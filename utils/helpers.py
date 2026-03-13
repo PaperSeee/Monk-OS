@@ -165,3 +165,80 @@ def sub_label(text: str):
         ▸ {text}
     </div>
     """, unsafe_allow_html=True)
+
+
+def render_pillar_top_nav(current_page: str):
+    """Render a compact top-right custom menu for Dashboard/LT/MT/CT pages."""
+    items = {
+        "app": ("🏠 Dashboard", "app.py"),
+        "lt": ("🏰 LT Épargne", "pages/_1_LT_Epargne.py"),
+        "mt": ("📈 MT Trading", "pages/_2_MT_Trading.py"),
+        "ct": ("💰 CT Business", "pages/_3_CT_Business.py"),
+    }
+
+    options = ["app", "lt", "mt", "ct"]
+    labels = {key: items[key][0] for key in options}
+
+    spacer_col, nav_col = st.columns([3.8, 1.2])
+    with nav_col:
+        selected = st.selectbox(
+            "Navigation",
+            options,
+            format_func=lambda value: labels[value],
+            index=options.index(current_page),
+            key=f"top_nav_{current_page}",
+            label_visibility="collapsed",
+        )
+        if selected != current_page:
+            st.switch_page(items[selected][1])
+
+
+def render_modules_quick_menu(key_suffix: str = "default"):
+    """Render quick access to classic MONK-OS module pages."""
+    module_items = {
+        "🏰 LT Épargne (Pillar)": "pages/_1_LT_Epargne.py",
+        "🏰 Fortress One": "pages/1_🏰_Fortress_One.py",
+        "📈 Equity Engine": "pages/2_📈_Equity_Engine.py",
+        "🔮 Freedom Simulator": "pages/3_🔮_Freedom_Simulator.py",
+        "🛡️ Sentinel": "pages/4_🛡️_Sentinel.py",
+        "📊 Data Input": "pages/5_📊_Data_Input.py",
+        "📄 CEO Report": "pages/6_📄_CEO_Report.py",
+    }
+
+    st.markdown("""
+    <div style="font-size:0.58rem; color:#4A5568; letter-spacing:0.2em;
+                text-transform:uppercase; margin-bottom:0.5rem; font-weight:500;">
+        Modules historiques
+    </div>
+    """, unsafe_allow_html=True)
+
+    module_labels = list(module_items.keys())
+    selected_module = st.selectbox(
+        "Choisir un module",
+        module_labels,
+        key=f"modules_quick_select_{key_suffix}",
+        label_visibility="collapsed",
+    )
+
+    if st.button("Ouvrir module", key=f"modules_quick_open_{key_suffix}", use_container_width=True):
+        st.switch_page(module_items[selected_module])
+
+
+def render_long_term_sidebar_nav(key_suffix: str = "default"):
+    """Render shared sidebar nav for long-term module pages."""
+    with st.sidebar:
+        st.markdown("""
+        <div style="padding:1rem 0; text-align:center; border-bottom:1px solid #232836;">
+            <div style="font-size:1rem; font-weight:800; color:#F0F4FF;
+                        letter-spacing:-0.02em; font-family:'JetBrains Mono',monospace;">
+                MONK-OS v3
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+        if st.button("← Dashboard", use_container_width=True, key=f"go_dashboard_{key_suffix}"):
+            st.switch_page("app.py")
+
+        st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
+        render_modules_quick_menu(key_suffix)

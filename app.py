@@ -16,12 +16,13 @@ from db.database import (
     get_setting,
     set_setting,
     get_lt_capital,
+    get_latest_portfolio_total_value,
     get_prop_challenges,
     get_business_tests,
     get_total_payouts,
     get_risk_investment_totals,
 )
-from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, fmt, get_fx_rates
+from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, fmt, get_fx_rates, render_pillar_top_nav
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -114,6 +115,8 @@ with st.sidebar:
         st.rerun()
 
 # ── MAIN PAGE HEADER ────────────────────────────────────────────────────────
+render_pillar_top_nav("app")
+
 date_str, time_str = get_now_str(st.session_state.timezone)
 r = get_fx_rates() if st.session_state.currency != "EUR" else {"EUR": 1.0}
 ccy = st.session_state.currency
@@ -152,7 +155,9 @@ st.markdown("<div style='margin:1rem 0; width:60px; height:3px; background:#3B82
             unsafe_allow_html=True)
 
 # ── LOAD AGGREGATED DATA FROM ALL 3 PILLARS ───────────────────────────────
-lt_capital = get_lt_capital()
+lt_cash_capital = get_lt_capital()
+etf_portfolio_value = get_latest_portfolio_total_value()
+lt_capital = lt_cash_capital + etf_portfolio_value
 challenges = get_prop_challenges()
 tests = get_business_tests()
 risk_totals = get_risk_investment_totals()
@@ -167,7 +172,7 @@ funded_live = sum(
     if c.get("status") in ["En cours", "Passé"]
 )
 
-inv_bourse = float(get_setting("lt_invest_bourse", "0"))
+inv_bourse = etf_portfolio_value
 inv_crypto = float(get_setting("lt_invest_crypto", "0"))
 inv_immo = float(get_setting("lt_invest_immo", "0"))
 total_invest = inv_bourse + inv_crypto + inv_immo

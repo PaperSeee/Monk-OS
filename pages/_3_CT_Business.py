@@ -18,8 +18,13 @@ from db.database import (
     delete_risk_investment,
     get_risk_investments,
     get_risk_investment_totals,
+    create_business_test,
+    get_business_tests,
+    update_business_test_status,
+    add_business_cash_burn,
+    delete_business_test,
 )
-from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, fmt, get_fx_rates
+from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, fmt, get_fx_rates, render_pillar_top_nav
 
 st.set_page_config(
     page_title="MONK-OS : CT — Investissements à Risque",
@@ -48,21 +53,6 @@ with st.sidebar:
 
     st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
 
-    # Navigation Par Pilier
-    st.markdown("""
-    <div style="font-size:0.58rem; color:#4A5568; letter-spacing:0.3em;
-                text-transform:uppercase; font-weight:500; margin-bottom:0.8rem;">
-        Navigation
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📈 MT", use_container_width=True, key="nav_mt"):
-            st.switch_page("pages/_2_MT_Trading.py")
-    with col2:
-        st.button("💰 Investissements", use_container_width=True, key="nav_risk_disabled", disabled=True)
-
     if st.button("← Accueil", use_container_width=True, key="home"):
         st.switch_page("app.py")
 
@@ -78,6 +68,8 @@ with st.sidebar:
     st.caption("Crypto · Spéculation · Gains & Pertes")
 
 # ── HEADER ──────────────────────────────────────────────────────────────────
+render_pillar_top_nav("ct")
+
 date_str, time_str = get_now_str(st.session_state.timezone)
 r = get_fx_rates() if st.session_state.currency != "EUR" else {"EUR": 1.0}
 ccy = st.session_state.currency
@@ -115,23 +107,31 @@ st.markdown("<div style='margin:1rem 0; width:60px; height:3px; background:#8B5C
 # ── MAIN CONTENT ────────────────────────────────────────────────────────────
 investments = get_risk_investments()
 totals = get_risk_investment_totals()
+business_tests = get_business_tests()
+
+total_allocated_budget = sum(float(t.get("allocated_budget", 0) or 0) for t in business_tests)
+total_cash_burn = sum(float(t.get("cash_burn", 0) or 0) for t in business_tests)
+active_business = sum(
+    1 for t in business_tests if (t.get("status") or "").lower() not in ["terminé", "abandonne", "abandonné", "fail"]
+)
 
 # Top KPI metrics
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Capital Investi", fmt(totals['total_invested'], ccy, r))
-col2.metric("Valeur Actuelle", fmt(totals['total_current'], ccy, r))
+kpi_top_1, kpi_top_2, kpi_top_3 = st.columns(3)
+kpi_top_1.metric("Capital Investi", fmt(totals['total_invested'], ccy, r))
+kpi_top_2.metric("Valeur Actuelle", fmt(totals['total_current'], ccy, r))
+kpi_top_3.metric("Gain/Perte €", fmt(totals['gain_loss'], ccy, r))
 
-gain_loss_color = "green" if totals['gain_loss'] >= 0 else "red"
-col3.metric("Gain/Perte €", fmt(totals['gain_loss'], ccy, r))
-col4.metric("Performance %", f"{totals['gain_loss_pct']:.2f}%")
+kpi_bot_1, kpi_bot_2, kpi_bot_3 = st.columns(3)
+kpi_bot_1.metric("Performance %", f"{totals['gain_loss_pct']:.2f}%")
+kpi_bot_2.metric("Budget Business", fmt(total_allocated_budget, ccy, r))
+kpi_bot_3.metric("Burn Business", fmt(total_cash_burn, ccy, r), delta=f"{active_business} actifs")
 
 st.divider()
 
-# Add new investment form
-st.markdown("### ➕ Ajouter un investissement à risque")
-col_form1, col_form2 = st.columns(2)
+col_risk, col_business = st.columns(2)
 
-with col_form1:
+with col_risk:
+    st.markdown("### 💣 Investissement à risque")
     with st.form("add_investment_form"):
         st.write("**Nouvel investissement**")
         inv_name = st.text_input("Nom de l'actif", placeholder="Bitcoin, Ethereum, Tesla, etc.")
@@ -139,7 +139,7 @@ with col_form1:
         quantity = st.number_input("Quantité", min_value=0.0, step=0.01, value=0.0)
         entry_price = st.number_input("Prix d'entrée", min_value=0.0, step=0.01, value=0.0)
         note = st.text_input("Note (optionnel)", placeholder="Raison de l'investissement")
-        
+
         if st.form_submit_button("✓ Ajouter investissement"):
             if inv_name and quantity > 0 and entry_price > 0:
                 create_risk_investment(inv_name, asset_type, quantity, entry_price, note)
@@ -148,33 +148,14 @@ with col_form1:
             else:
                 st.error("Tous les champs sont requis (quantité > 0)")
 
-with col_form2:
-    st.info("""
-    **Comment ça marche:**
-    - Entrez l'actif que vous possédez
-    - Mettez à jour le prix actuel ci-dessous
-    - Suivez vos gains/pertes en temps réel
-    - Supprimez quand vous liquidez
-    """)
-
-st.divider()
-
-# Investment portfolio
-if not investments:
-    st.caption("Aucun investissement pour l'instant.")
-else:
-    st.markdown("### 📊 Votre portefeuille")
-    
-    # Grid layout for investments
-    cols_per_row = 3
-    for idx, inv in enumerate(investments):
-        if idx % cols_per_row == 0:
-            cols = st.columns(cols_per_row)
-        
-        with cols[idx % cols_per_row]:
+    st.markdown("### 📊 Portefeuille risque")
+    if not investments:
+        st.caption("Aucun investissement pour l'instant.")
+    else:
+        for inv in investments:
             gain_color = "🟢" if inv['gain_loss'] >= 0 else "🔴"
             perf_color = "#10B981" if inv['gain_loss'] >= 0 else "#EF4444"
-            
+
             st.markdown(f"""
             <div class="uniform-card">
                 <div>
@@ -194,8 +175,7 @@ else:
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
-            # Price update section
+
             col_price, col_delete = st.columns([3, 1])
             with col_price:
                 new_price = st.number_input(
@@ -209,13 +189,101 @@ else:
                 if new_price != float(inv['current_price']):
                     update_risk_investment_price(inv['id'], new_price)
                     st.rerun()
-            
+
             with col_delete:
                 if st.button("🗑️", key=f"del_inv_{inv['id']}", use_container_width=True):
                     delete_risk_investment(inv['id'])
-                    st.warning(f"✓ Liquidé")
+                    st.warning("✓ Liquidé")
                     st.rerun()
-            
+
+            st.divider()
+
+with col_business:
+    st.markdown("### 🚀 Business lancés (non établis)")
+    with st.form("add_business_form"):
+        st.write("**Nouveau business test**")
+        biz_name = st.text_input("Nom du business", placeholder="Ex: Shop Shopify niche fitness")
+        biz_type = st.selectbox("Type", ["E-commerce", "SaaS", "Agence", "Contenu", "Autre"])
+        biz_budget = st.number_input("Budget alloué", min_value=0.0, step=50.0, value=0.0)
+        biz_desc = st.text_input("Description", placeholder="Offre, canal d'acquisition, cible...")
+        deduct_lt = st.checkbox("Déduire du capital LT", value=False)
+
+        if st.form_submit_button("✓ Ajouter business"):
+            if biz_name:
+                create_business_test(
+                    name=f"{biz_type} — {biz_name}",
+                    description=biz_desc,
+                    status="Lancé",
+                    allocated_budget=float(biz_budget),
+                    deduct_from_lt=deduct_lt,
+                )
+                st.success(f"✓ {biz_name} ajouté!")
+                st.rerun()
+            else:
+                st.error("Le nom du business est requis")
+
+    if not business_tests:
+        st.caption("Aucun business lancé pour l'instant.")
+    else:
+        st.markdown("### 📦 Business en cours")
+        status_options = ["Idée", "Lancé", "Test", "En croissance", "Pausé", "Terminé", "Abandonné"]
+
+        for test in business_tests:
+            allocated = float(test.get("allocated_budget", 0) or 0)
+            burn = float(test.get("cash_burn", 0) or 0)
+            runway = allocated - burn
+            status = test.get("status") or "Lancé"
+
+            st.markdown(f"""
+            <div class="uniform-card">
+                <div>
+                    <div class="uniform-card-title">{test.get('name', 'Business')}</div>
+                    <div class="uniform-card-value">{fmt(allocated, ccy, r)}</div>
+                    <div style="font-size:0.7rem; color:#8892AA;">Budget alloué</div>
+                </div>
+                <div class="uniform-card-subtitle">
+                    <div style="font-size:0.75rem; color:#F0F4FF; font-weight:700;">Statut: {status}</div>
+                    <div style="font-size:0.65rem; margin-top:0.25rem; color:#8892AA;">
+                        Burn: {fmt(burn, ccy, r)} · Reste: {fmt(runway, ccy, r)}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            current_idx = status_options.index(status) if status in status_options else 1
+            new_status = st.selectbox(
+                f"Statut {test['id']}",
+                options=status_options,
+                index=current_idx,
+                key=f"biz_status_{test['id']}",
+                label_visibility="collapsed",
+            )
+            if new_status != status:
+                update_business_test_status(int(test['id']), new_status)
+                st.rerun()
+
+            burn_col1, burn_col2, burn_col3 = st.columns([3, 1, 1])
+            with burn_col1:
+                burn_add = st.number_input(
+                    f"Burn add {test['id']}",
+                    min_value=0.0,
+                    step=10.0,
+                    value=0.0,
+                    key=f"biz_burn_{test['id']}",
+                    label_visibility="collapsed",
+                )
+            with burn_col2:
+                if st.button("+ Burn", key=f"add_burn_{test['id']}", use_container_width=True):
+                    if burn_add > 0:
+                        add_business_cash_burn(int(test['id']), float(burn_add), deduct_from_lt=False)
+                        st.success("Burn ajouté")
+                        st.rerun()
+            with burn_col3:
+                if st.button("🗑️", key=f"del_biz_{test['id']}", use_container_width=True):
+                    delete_business_test(int(test['id']))
+                    st.warning("Business supprimé")
+                    st.rerun()
+
             st.divider()
 
 st.divider()

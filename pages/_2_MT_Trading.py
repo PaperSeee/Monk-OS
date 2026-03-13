@@ -26,7 +26,7 @@ from db.database import (
     get_prop_payouts,
     get_total_payouts,
 )
-from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, fmt, get_fx_rates
+from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, fmt, get_fx_rates, render_pillar_top_nav
 
 st.set_page_config(
     page_title="MONK-OS : MT — Trading & Prop Firms",
@@ -55,21 +55,6 @@ with st.sidebar:
 
     st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
 
-    # Navigation Par Pilier
-    st.markdown("""
-    <div style="font-size:0.58rem; color:#4A5568; letter-spacing:0.3em;
-                text-transform:uppercase; font-weight:500; margin-bottom:0.8rem;">
-        Navigation
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.button("📈 MT", use_container_width=True, key="nav_mt_disabled", disabled=True)
-    with col2:
-        if st.button("💰 Investissements", use_container_width=True, key="nav_risk"):
-            st.switch_page("pages/_3_CT_Business.py")
-
     if st.button("← Accueil", use_container_width=True, key="home"):
         st.switch_page("app.py")
 
@@ -88,6 +73,8 @@ with st.sidebar:
 
 
 # ── HEADER ──────────────────────────────────────────────────────────────────
+render_pillar_top_nav("mt")
+
 date_str, time_str = get_now_str(st.session_state.timezone)
 r = {"USD": 1.0}  # MT is always in USD
 ccy = "USD"

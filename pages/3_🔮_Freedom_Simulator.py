@@ -8,11 +8,18 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from db.database import init_db, get_setting
-from utils.helpers import inject_css, section_head, sub_label, plotly_theme, fmt, get_fx_rates
+from db.database import init_db, get_setting, get_lt_capital, get_latest_portfolio_total_value
+from utils.helpers import inject_css, section_head, sub_label, plotly_theme, fmt, get_fx_rates, render_long_term_sidebar_nav
+
+st.set_page_config(
+    page_title="MONK-OS : Freedom Simulator",
+    page_icon="🔮",
+    layout="wide",
+)
 
 init_db()
 inject_css()
+render_long_term_sidebar_nav("freedom")
 
 import numpy as np
 import plotly.graph_objects as go
@@ -22,7 +29,7 @@ section_head("MODULE 03 — FREEDOM SIMULATOR V2")
 ccy   = st.session_state.get("currency", "EUR")
 rates = get_fx_rates() if ccy != "EUR" else {"EUR": 1.0}
 
-default_savings = float(get_setting("current_savings", "0"))
+default_savings = get_lt_capital() + get_latest_portfolio_total_value()
 default_monthly = float(get_setting("monthly_budget", "1250"))
 
 sub_label("Paramètres de simulation")

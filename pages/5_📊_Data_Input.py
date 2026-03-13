@@ -12,10 +12,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from db.database import (init_db, upsert_finance_entry, get_finances,
                           get_finance_for_month, get_setting, set_setting,
                           delete_finance_entry)
-from utils.helpers import inject_css, section_head, sub_label, plotly_theme, fmt, get_fx_rates
+from utils.helpers import inject_css, section_head, sub_label, plotly_theme, fmt, get_fx_rates, render_long_term_sidebar_nav
+
+st.set_page_config(
+    page_title="MONK-OS : Data Input",
+    page_icon="📊",
+    layout="wide",
+)
 
 init_db()
 inject_css()
+render_long_term_sidebar_nav("data_input")
 
 import pandas as pd
 import plotly.graph_objects as go

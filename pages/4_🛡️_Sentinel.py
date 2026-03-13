@@ -9,10 +9,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from db.database import init_db, log_sentinel, get_sentinel_logs, get_setting
-from utils.helpers import inject_css, section_head, sub_label
+from utils.helpers import inject_css, section_head, sub_label, render_long_term_sidebar_nav
+
+st.set_page_config(
+    page_title="MONK-OS : Sentinel",
+    page_icon="🛡️",
+    layout="wide",
+)
 
 init_db()
 inject_css()
+render_long_term_sidebar_nav("sentinel")
 
 import pandas as pd
 import random

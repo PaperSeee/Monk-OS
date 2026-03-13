@@ -9,18 +9,25 @@ from pathlib import Path
 from datetime import date
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from db.database import init_db, get_setting, set_setting, get_latest_portfolio_v2, get_finances
-from utils.helpers import inject_css, section_head, sub_label, fmt, get_fx_rates, get_now_str, TIMEZONES
+from db.database import init_db, get_setting, set_setting, get_latest_portfolio_v2, get_finances, get_lt_capital
+from utils.helpers import inject_css, section_head, sub_label, fmt, get_fx_rates, get_now_str, TIMEZONES, render_long_term_sidebar_nav
+
+st.set_page_config(
+    page_title="MONK-OS : Fortress One",
+    page_icon="🏰",
+    layout="wide",
+)
 
 init_db()
 inject_css()
+render_long_term_sidebar_nav("fortress")
 
 ccy     = st.session_state.get("currency", "EUR")
 tz_name = st.session_state.get("timezone", "Europe/Brussels")
 rates   = get_fx_rates() if ccy != "EUR" else {"EUR": 1.0}
 
 # ── Data ─────────────────────────────────────────────────────────────────────
-current_savings = float(get_setting("current_savings", "0"))
+current_savings = get_lt_capital()
 savings_goal    = float(get_setting("savings_goal", "2000"))
 monk_end_raw    = get_setting("monk_mode_end_date", "2026-04-09")
 portfolio_rows  = get_latest_portfolio_v2()

@@ -309,6 +309,9 @@ def save_portfolio_v2(rows: list[dict]):
     conn.commit()
     conn.close()
 
+    total_value = sum(float(r.get("shares", 0) or 0) * float(r.get("price", 0) or 0) for r in rows)
+    set_setting("lt_invest_bourse", total_value)
+
 
 def get_latest_portfolio_v2() -> list[dict]:
     """Returns the most recent portfolio snapshot rows."""
@@ -332,6 +335,12 @@ def get_latest_portfolio():
     # Aggregate value for backward compat
     total_value = sum(r["shares"] * r["price"] for r in rows)
     return {"total_value": total_value, "rows": rows}
+
+
+def get_latest_portfolio_total_value() -> float:
+    """Returns total EUR value of latest ETF portfolio snapshot."""
+    rows = get_latest_portfolio_v2()
+    return float(sum(float(r.get("shares", 0) or 0) * float(r.get("price", 0) or 0) for r in rows))
 
 
 # ── SENTINEL ─────────────────────────────────────────────────────────────────
@@ -503,6 +512,13 @@ def get_business_tests():
     rows = conn.execute("SELECT * FROM business_tests ORDER BY created_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def delete_business_test(test_id: int):
+    conn = get_connection()
+    conn.execute("DELETE FROM business_tests WHERE id = ?", (test_id,))
+    conn.commit()
+    conn.close()
 
 
 # ── RISK INVESTMENTS ─────────────────────────────────────────────────────────

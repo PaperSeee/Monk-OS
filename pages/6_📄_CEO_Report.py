@@ -11,10 +11,17 @@ from datetime import date, datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from db.database import init_db, get_setting, get_latest_finance, get_latest_portfolio_v2, get_finances, get_sentinel_logs
-from utils.helpers import inject_css, section_head, sub_label, fmt, get_fx_rates, ETF_YIELD
+from utils.helpers import inject_css, section_head, sub_label, fmt, get_fx_rates, ETF_YIELD, render_long_term_sidebar_nav
+
+st.set_page_config(
+    page_title="MONK-OS : CEO Report",
+    page_icon="📄",
+    layout="wide",
+)
 
 init_db()
 inject_css()
+render_long_term_sidebar_nav("ceo_report")
 
 section_head("MODULE 06 — CEO MONTHLY REPORT")
 

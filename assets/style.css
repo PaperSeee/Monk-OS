@@ -42,6 +42,10 @@ html, body, [class*="css"] {
   max-width: 1400px;
 }
 
+[data-testid="stVerticalBlock"] > [style*="flex-direction: column"] > [data-testid="stVerticalBlock"] {
+  gap: 0.55rem;
+}
+
 /* ── HIDE STREAMLIT CHROME ── */
 /* Ne pas cacher stToolbar globalement : il contient le bouton sidebar collapsée ! */
 [data-testid="stToolbarActions"] { display: none !important; }
@@ -58,6 +62,9 @@ footer { display: none !important; }
 }
 [data-testid="stSidebar"] * {
   font-family: 'Inter', sans-serif !important;
+}
+[data-testid="stSidebarNav"] {
+  display: none !important;
 }
 [data-testid="stSidebarNav"] a {
   border-radius: 6px;
@@ -110,7 +117,8 @@ footer { display: none !important; }
   letter-spacing: 0.04em;
   border-radius: 8px !important;
   padding: 0.6rem 1.6rem !important;
-  min-width: 160px;
+  min-width: 0 !important;
+  width: 100% !important;
   transition: all 0.2s ease !important;
   box-shadow: none !important;
   outline: none !important;
@@ -158,6 +166,14 @@ footer { display: none !important; }
   color: var(--text-primary) !important;
   font-family: 'Inter', sans-serif !important;
   font-size: 0.9rem !important;
+}
+
+.stNumberInput,
+.stTextInput,
+.stSelectbox,
+.stDateInput,
+.stTextArea {
+  margin-bottom: 0.2rem !important;
 }
 .stTextInput > div > div > input:focus,
 .stNumberInput > div > div > input:focus,
