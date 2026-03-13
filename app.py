@@ -19,6 +19,7 @@ from db.database import (
     get_prop_challenges,
     get_business_tests,
     get_total_payouts,
+    get_risk_investment_totals,
 )
 from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, fmt, get_fx_rates
 
@@ -150,6 +151,7 @@ st.markdown("<div style='margin:1rem 0; width:60px; height:3px; background:#3B82
 lt_capital = get_lt_capital()
 challenges = get_prop_challenges()
 tests = get_business_tests()
+risk_totals = get_risk_investment_totals()
 
 total_challenge_cost = sum(float(c.get("price", 0) or 0) for c in challenges)
 total_payouts = sum(get_total_payouts(c['id']) for c in challenges)
@@ -177,8 +179,9 @@ st.markdown("""
 kpi_cols = st.columns(4)
 kpi_cols[0].metric("💎 Capital Global (LT)", fmt(lt_capital, ccy, r))
 kpi_cols[1].metric("🚀 Funded (MT)", fmt(funded_live, ccy, r))
-kpi_cols[2].metric("📊 Budget alloué (CT)", fmt(total_allocated_budget, ccy, r))
-kpi_cols[3].metric("📉 Cash Burn total", fmt(total_cash_burn, ccy, r))
+kpi_cols[2].metric("📊 Investis (Risque)", fmt(risk_totals['total_invested'], ccy, r))
+gain_loss_emoji = "🟢" if risk_totals['gain_loss'] >= 0 else "🔴"
+kpi_cols[3].metric(f"{gain_loss_emoji} Gains/Pertes", fmt(risk_totals['gain_loss'], ccy, r))
 
 st.divider()
 
@@ -212,7 +215,7 @@ with nav_cols[0]:
     </div>
     """, unsafe_allow_html=True)
     if st.button("Ouvrir", key="btn_lt", use_container_width=True):
-        st.switch_page("pages/1_LT_Epargne.py")
+        st.switch_page("pages/_1_LT_Epargne.py")
 
 # MT Card
 with nav_cols[1]:
@@ -234,29 +237,29 @@ with nav_cols[1]:
     </div>
     """, unsafe_allow_html=True)
     if st.button("Ouvrir", key="btn_mt", use_container_width=True):
-        st.switch_page("pages/2_MT_Trading.py")
+        st.switch_page("pages/_2_MT_Trading.py")
 
-# CT Card
+# CT Card — Risk Investments
 with nav_cols[2]:
     st.markdown(f"""
     <div class="monk-card" style="text-align:center; padding:1.5rem 1rem; min-height:220px; display:flex; flex-direction:column; justify-content:space-between;">
         <div>
-            <div style="font-size:2rem; margin-bottom:0.8rem;">🔮</div>
+            <div style="font-size:2rem; margin-bottom:0.8rem;">💰</div>
             <div style="font-size:0.68rem; color:#8892AA; margin-bottom:1rem;">
-                Business & Tests
+                Crypto & Spéculation
             </div>
             <div style="font-size:0.85rem; color:#F0F4FF; font-weight:700; font-family:'JetBrains Mono',monospace; margin-bottom:0.6rem;">
-                {len(tests)} tests
+                {fmt(risk_totals['gain_loss'], ccy, r)}
             </div>
             <hr style="border-color:#232836; margin:0.5rem 0;">
             <div style="font-size:0.65rem; color:#8892AA;">
-                Burn: {fmt(total_cash_burn, ccy, r)}
+                {risk_totals['gain_loss_pct']:+.2f}% Performance
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
-    if st.button("Ouvrir", key="btn_ct", use_container_width=True):
-        st.switch_page("pages/3_CT_Business.py")
+    if st.button("Ouvrir", key="btn_risk", use_container_width=True):
+        st.switch_page("pages/_3_CT_Business.py")
 
 st.divider()
 

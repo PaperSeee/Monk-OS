@@ -111,6 +111,20 @@ def init_db():
         )
     """)
 
+    # Risk Investments — Crypto, speculative stocks, etc.
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS risk_investments (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at     TEXT NOT NULL,
+            name           TEXT NOT NULL,
+            asset_type     TEXT DEFAULT 'Crypto',
+            quantity       REAL DEFAULT 0,
+            entry_price    REAL DEFAULT 0,
+            current_price  REAL DEFAULT 0,
+            note           TEXT DEFAULT ''
+        )
+    """)
+
     # Migrate old finances table if month_key column missing
     try:
         c.execute("ALTER TABLE finances ADD COLUMN month_key TEXT")
@@ -489,3 +503,81 @@ def get_business_tests():
     rows = conn.execute("SELECT * FROM business_tests ORDER BY created_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ── RISK INVESTMENTS ─────────────────────────────────────────────────────────
+
+def create_risk_investment(name: str, asset_type: str, quantity: float, entry_price: float, note: str = ""):
+    """Create a new risky investment (crypto, speculative stock, etc.)"""
+    conn = get_connection()
+    conn.execute(
+        """
+        INSERT INTO risk_investments (created_at, name, asset_type, quantity, entry_price, current_price, note)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (datetime.now().isoformat(), name, asset_type, float(quantity), float(entry_price), float(entry_price), note),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_risk_investment_price(investment_id: int, current_price: float):
+    """Update current price of an investment"""
+    conn = get_connection()
+    conn.execute(
+        "UPDATE risk_investments SET current_price = ? WHERE id = ?",
+        (float(current_price), investment_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_risk_investment(investment_id: int):
+    """Delete a risk investment"""
+    conn = get_connection()
+    conn.execute("DELETE FROM risk_investments WHERE id = ?", (investment_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_risk_investments():
+    """Get all risk investments with gains/losses calculated"""
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM risk_investments ORDER BY created_at DESC").fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        invested = float(d['quantity']) * float(d['entry_price'])
+        current = float(d['quantity']) * float(d['current_price'])
+        gain_loss = current - invested
+        gain_loss_pct = (gain_loss / invested * 100) if invested > 0 else 0
+        d['invested_amount'] = invested
+        d['current_amount'] = current
+        d['gain_loss'] = gain_loss
+        d['gain_loss_pct'] = gain_loss_pct
+        result.append(d)
+    return result
+
+
+def get_risk_investment_totals():
+    """Get total invested and current value across all risk investments"""
+    conn = get_connection()
+    rows = conn.execute("SELECT quantity, entry_price, current_price FROM risk_investments").fetchall()
+    conn.close()
+    
+    total_invested = 0.0
+    total_current = 0.0
+    
+    for r in rows:
+        invested = float(r['quantity']) * float(r['entry_price'])
+        current = float(r['quantity']) * float(r['current_price'])
+        total_invested += invested
+        total_current += current
+    
+    return {
+        'total_invested': total_invested,
+        'total_current': total_current,
+        'gain_loss': total_current - total_invested,
+        'gain_loss_pct': ((total_current - total_invested) / total_invested * 100) if total_invested > 0 else 0
+    }

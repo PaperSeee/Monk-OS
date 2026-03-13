@@ -63,15 +63,12 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    nav_col = st.columns(3)
-    with nav_col[0]:
-        if st.button("🏰 LT", use_container_width=True, key="nav_lt"):
-            st.switch_page("pages/1_LT_Epargne.py")
-    with nav_col[1]:
+    col1, col2 = st.columns(2)
+    with col1:
         st.button("📈 MT", use_container_width=True, key="nav_mt_disabled", disabled=True)
-    with nav_col[2]:
-        if st.button("🔮 CT", use_container_width=True, key="nav_ct"):
-            st.switch_page("pages/3_CT_Business.py")
+    with col2:
+        if st.button("💰 Investissements", use_container_width=True, key="nav_risk"):
+            st.switch_page("pages/_3_CT_Business.py")
 
     if st.button("← Accueil", use_container_width=True, key="home"):
         st.switch_page("app.py")
