@@ -42,18 +42,22 @@ if "timezone" not in st.session_state:
 
 # ── SIDEBAR ─────────────────────────────────────────────────────────────────
 with st.sidebar:
-    # Branding
+    # Branding — APP LOGO
+    if st.button("", key="logo_home", use_container_width=True, help="Retour au dashboard"):
+        st.rerun()
+    
     st.markdown("""
-    <div style="padding:1.2rem 0 1.5rem 0; text-align:center; border-bottom:1px solid #232836;">
-        <div style="font-size:1.4rem; font-weight:800; color:#F0F4FF;
+    <div style="padding:1.2rem 0 0.5rem 0; text-align:center; border-bottom:1px solid #232836;">
+        <div style="font-size:3rem; margin-bottom:0.5rem;">▧</div>
+        <div style="font-size:1.1rem; font-weight:800; color:#F0F4FF;
                     letter-spacing:-0.02em; font-family:'JetBrains Mono',monospace;">
             MONK-OS
         </div>
-        <div style="font-size:0.58rem; color:#4A5568; letter-spacing:0.3em;
-                    text-transform:uppercase; margin-top:0.3rem;">
-            Life & Wealth OS · V3.0
+        <div style="font-size:0.55rem; color:#3B82F6; letter-spacing:0.3em;
+                    text-transform:uppercase; margin-top:0.2rem; font-weight:700;">
+            Life & Wealth
         </div>
-        <div style="margin-top:0.8rem;">
+        <div style="margin-top:0.6rem;">
             <span style="background:#1E3A5F; color:#3B82F6; padding:0.2rem 0.7rem;
                          border-radius:20px; font-size:0.62rem; font-weight:600;
                          letter-spacing:0.05em;">● LIVE</span>
@@ -61,7 +65,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
     # ── Currency toggle ──────────────────────────────────────────────────────
     st.markdown("""

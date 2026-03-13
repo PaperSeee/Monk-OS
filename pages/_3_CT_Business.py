@@ -165,48 +165,58 @@ if not investments:
 else:
     st.markdown("### 📊 Votre portefeuille")
     
-    for inv in investments:
-        col_inv1, col_inv2, col_inv3 = st.columns([2.5, 2, 0.5])
+    # Grid layout for investments
+    cols_per_row = 3
+    for idx, inv in enumerate(investments):
+        if idx % cols_per_row == 0:
+            cols = st.columns(cols_per_row)
         
-        with col_inv1:
-            # Update current price
-            new_price = st.number_input(
-                f"Prix actuel: {inv['name']} ({inv['asset_type']})",
-                min_value=0.0,
-                step=0.01,
-                value=float(inv['current_price']),
-                key=f"price_{inv['id']}",
-                label_visibility="collapsed"
-            )
-            if new_price != float(inv['current_price']):
-                update_risk_investment_price(inv['id'], new_price)
-                st.rerun()
-        
-        with col_inv2:
-            # Display gains/losses
+        with cols[idx % cols_per_row]:
             gain_color = "🟢" if inv['gain_loss'] >= 0 else "🔴"
+            perf_color = "#10B981" if inv['gain_loss'] >= 0 else "#EF4444"
+            
             st.markdown(f"""
-            <div class="monk-card" style="padding:0.8rem;">
-                <div style="font-size:0.75rem; color:#8B5CF6; font-weight:700;">
-                    {inv['name']} · {inv['quantity']:.4f}
+            <div class="uniform-card">
+                <div>
+                    <div class="uniform-card-title">{inv['name']}</div>
+                    <div class="uniform-card-value">{gain_color} {fmt(inv['gain_loss'], ccy, r)}</div>
+                    <div style="font-size:0.7rem; color:#8892AA;">
+                        {inv['asset_type']} · {inv['quantity']:.4f}
+                    </div>
                 </div>
-                <div style="font-size:0.9rem; color:#F0F4FF; margin-top:0.3rem;">
-                    {gain_color} {fmt(inv['gain_loss'], ccy, r)}
-                </div>
-                <div style="font-size:0.65rem; color:#8892AA; margin-top:0.2rem;">
-                    In: {fmt(inv['invested_amount'], ccy, r)} → Now: {fmt(inv['current_amount'], ccy, r)}
-                </div>
-                <div style="font-size:0.65rem; color:#10B981; margin-top:0.1rem;">
-                    {inv['gain_loss_pct']:+.2f}%
+                <div class="uniform-card-subtitle">
+                    <div style="color:{perf_color}; font-weight:700; font-size:0.75rem;">
+                        {inv['gain_loss_pct']:+.2f}%
+                    </div>
+                    <div style="font-size:0.65rem; margin-top:0.3rem;">
+                        In: {fmt(inv['invested_amount'], ccy, r)} → Now: {fmt(inv['current_amount'], ccy, r)}
+                    </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-        
-        with col_inv3:
-            if st.button("🗑️", key=f"del_inv_{inv['id']}", use_container_width=True):
-                delete_risk_investment(inv['id'])
-                st.warning(f"✓ {inv['name']} liquidé")
-                st.rerun()
+            
+            # Price update section
+            col_price, col_delete = st.columns([3, 1])
+            with col_price:
+                new_price = st.number_input(
+                    f"Prix {inv['name']}",
+                    min_value=0.0,
+                    step=0.01,
+                    value=float(inv['current_price']),
+                    key=f"price_{inv['id']}",
+                    label_visibility="collapsed"
+                )
+                if new_price != float(inv['current_price']):
+                    update_risk_investment_price(inv['id'], new_price)
+                    st.rerun()
+            
+            with col_delete:
+                if st.button("🗑️", key=f"del_inv_{inv['id']}", use_container_width=True):
+                    delete_risk_investment(inv['id'])
+                    st.warning(f"✓ Liquidé")
+                    st.rerun()
+            
+            st.divider()
 
 st.divider()
 

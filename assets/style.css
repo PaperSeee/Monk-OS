@@ -408,3 +408,53 @@ label, .stLabel {
   font-size: 0.8rem !important; color: var(--text-secondary) !important;
   font-weight: 500 !important; letter-spacing: 0.02em !important;
 }
+
+/* ── UNIFORM CARDS ── */
+.uniform-card {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  padding: 1rem !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 140px;
+  transition: all 0.25s ease;
+}
+.uniform-card:hover {
+  border-color: var(--border-light) !important;
+  background: var(--bg-card-hover) !important;
+}
+.uniform-card-title {
+  font-size: 0.73rem;
+  color: #7A8DAA;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+.uniform-card-value {
+  font-size: 1.3rem;
+  color: var(--text-primary);
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 0.6rem;
+}
+.uniform-card-subtitle {
+  font-size: 0.65rem;
+  color: #5B6785;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+/* ── EXPANDER CARDS ── */
+[data-testid="expander"] {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+}
+[data-testid="expander"] > button {
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+}
