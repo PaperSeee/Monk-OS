@@ -247,29 +247,25 @@ else:
 st.divider()
 
 # ── Portfolio Summary ─────────────────────────────────────────────────────────
-sub_label("Synthèse du portefeuille")
+sub_label("Synthèse de l'allocation mensuelle")
 
-total_eur = sum(
-    r["shares"] * prices_cache.get(r["ticker"], 0)
-    for r in st.session_state.etf_rows
-)
+total_eur = invest_amount_eur
 
 if total_eur > 0:
     col_donut, col_summary = st.columns([1.3, 1])
 
     with col_donut:
-        labels, values, colors_list, devs = [], [], [], []
+        labels, values, colors_list = [], [], []
         palette = ["#3B82F6","#10B981","#8B5CF6","#F59E0B","#EF4444",
                    "#06B6D4","#EC4899","#84CC16","#F97316","#A78BFA"]
 
         for idx, r in enumerate(st.session_state.etf_rows):
-            v = r["shares"] * prices_cache.get(r["ticker"], 0)
-            if v > 0:
+            alloc_eur = total_eur * (r["target_pct"] / 100)
+            if alloc_eur > 0:
+                etf_name = ETF_CATALOG.get(r["ticker"], r["ticker"])
                 labels.append(r["ticker"])
-                values.append(v)
+                values.append(alloc_eur)
                 colors_list.append(palette[idx % len(palette)])
-                actual_pct = v / total_eur * 100
-                devs.append(actual_pct - r["target_pct"])
 
         fig = go.Figure()
         fig.add_trace(go.Pie(
@@ -289,7 +285,7 @@ if total_eur > 0:
                         bgcolor="rgba(0,0,0,0)",
                         x=0.5, y=-0.18, xanchor="center", orientation="h"),
             annotations=[dict(
-                text=f"<b>{fmt(total_eur, ccy, rates)}</b>",
+                text=f"<b>{fmt(total_eur, ccy, rates)}</b><br><span style='font-size:10px;color:#4A5568'>/ mois</span>",
                 x=0.5, y=0.5,
                 font=dict(size=16, color="#F0F4FF", family="JetBrains Mono"),
                 showarrow=False
@@ -301,28 +297,31 @@ if total_eur > 0:
         st.markdown("<br>", unsafe_allow_html=True)
         rows_html = ""
         for idx, r in enumerate(st.session_state.etf_rows):
-            val = r["shares"] * prices_cache.get(r["ticker"], 0)
-            actual_pct = val / total_eur * 100 if total_eur > 0 else 0
-            dev = actual_pct - r["target_pct"]
-            dev_color = "#10B981" if abs(dev) < 2 else "#F59E0B" if abs(dev) < 5 else "#EF4444"
+            alloc_eur = total_eur * (r["target_pct"] / 100)
+            price_eur = prices_cache.get(r["ticker"], 0)
+            parts = alloc_eur / price_eur if price_eur > 0 else 0
+            etf_name = ETF_CATALOG.get(r["ticker"], r["ticker"])
             rows_html += f"""
             <div class="info-row">
-                <span class="info-key">{r["ticker"]}</span>
+                <span class="info-key">
+                    <span style="color:#F0F4FF;">{r["ticker"]}</span>
+                    <span style="color:#4A5568; font-size:0.65rem; margin-left:0.3rem;">({r['target_pct']:.0f}%)</span>
+                </span>
                 <span style="font-size:0.78rem; font-family:'JetBrains Mono',monospace;">
-                    <span style="color:#F0F4FF;">{actual_pct:.1f}%</span>
-                    <span style="color:{dev_color}; margin-left:0.4rem; font-size:0.72rem;">
-                        ({'+' if dev >= 0 else ''}{dev:.1f}% vs {r['target_pct']:.0f}%)
+                    <span style="color:#3B82F6; font-weight:700;">{fmt(alloc_eur, ccy, rates)}</span>
+                    <span style="color:#4A5568; font-size:0.68rem; margin-left:0.3rem;">
+                        · {parts:.4f} parts
                     </span>
                 </span>
             </div>"""
 
         st.markdown(f"""
         <div class="monk-card">
-            <div class="monk-card-title">Répartition actuelle vs cible</div>
+            <div class="monk-card-title">Répartition mensuelle</div>
             {rows_html}
             <div class="info-row" style="margin-top:0.5rem; border-top:1px solid #232836; padding-top:0.5rem;">
-                <span class="info-key">Total portefeuille</span>
-                <span class="info-value" style="color:#3B82F6;">{fmt(total_eur, ccy, rates)}</span>
+                <span class="info-key">Total mensuel</span>
+                <span class="info-value" style="color:#10B981;">{fmt(total_eur, ccy, rates)}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -357,10 +356,6 @@ if active_tickers:
 
 st.divider()
 
-
-
-st.divider()
-
 # ── Dividend Tracker ──────────────────────────────────────────────────────────
 sub_label("Dividend Tracker — Rendement théorique (positions ACC réinvesties)")
 
@@ -369,9 +364,11 @@ if total_eur > 0:
     total_annual_div = 0.0
     for r in st.session_state.etf_rows:
         ticker    = r["ticker"]
-        val       = r["shares"] * prices_cache.get(ticker, 0)
+        val       = total_eur * (r["target_pct"] / 100)
         yld       = ETF_YIELD.get(ticker, 1.5) / 100
-        annual_div = val * yld
+        # Annual yield on monthly investment (×12 for full year of DCA)
+        annual_val = val * 12
+        annual_div = annual_val * yld
         monthly_div = annual_div / 12
         total_annual_div += annual_div
         div_rows += f"""
@@ -391,6 +388,9 @@ if total_eur > 0:
     st.markdown(f"""
     <div class="monk-card">
         <div class="monk-card-title">Dividendes théoriques (réinvestis automatiquement)</div>
+        <div style="font-size:0.62rem; color:#4A5568; margin-bottom:0.6rem;">
+            Basé sur {fmt(total_eur, ccy, rates)}/mois × 12 = {fmt(total_eur * 12, ccy, rates)}/an investi
+        </div>
         {div_rows}
         <div class="info-row" style="border-top:1px solid #2D3447; padding-top:0.5rem; margin-top:0.3rem;">
             <span class="info-key">Total annuel estimé</span>
@@ -401,14 +401,6 @@ if total_eur > 0:
         <div style="font-size:0.68rem; color:#4A5568; margin-top:0.8rem; line-height:1.6;">
             ⓘ Ces ETFs sont ACC (accumulants) — les dividendes sont réinvestis automatiquement,
             non versés. Ces chiffres représentent la croissance implicite incluse dans le prix.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-    <div class="monk-card" style="text-align:center; padding:2rem;">
-        <div style="color:#4A5568; font-size:0.82rem;">
-            Entre tes positions pour voir le dividend tracker.
         </div>
     </div>
     """, unsafe_allow_html=True)
