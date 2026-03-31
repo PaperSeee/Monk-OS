@@ -153,6 +153,18 @@ def init_db():
         )
     """)
 
+    # Monthly investment logs (per ETF, per month)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS monthly_investments (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            month_key   TEXT NOT NULL,
+            ticker      TEXT NOT NULL,
+            amount_eur  REAL DEFAULT 0,
+            created_at  TEXT NOT NULL,
+            note        TEXT DEFAULT ''
+        )
+    """)
+
     # Migrate tax_pocket_entries: add source column if missing
     try:
         c.execute("ALTER TABLE tax_pocket_entries ADD COLUMN source TEXT DEFAULT ''")
@@ -181,11 +193,10 @@ def init_db():
     try:
         c.execute("ALTER TABLE finances ADD COLUMN month_key TEXT")
         conn.commit()
-        # backfill month_key for existing rows
         c.execute("UPDATE finances SET month_key = substr(date,1,7) WHERE month_key IS NULL OR month_key = ''")
         conn.commit()
     except Exception:
-        pass  # column already exists
+        pass
 
     # Migrate: add investment columns if missing
     for col in ["investments_etf REAL DEFAULT 0",
@@ -393,6 +404,67 @@ def get_latest_portfolio_total_value() -> float:
     """Returns total EUR value of latest ETF portfolio snapshot."""
     rows = get_latest_portfolio_v2()
     return float(sum(float(r.get("shares", 0) or 0) * float(r.get("price", 0) or 0) for r in rows))
+
+
+# ── MONTHLY INVESTMENTS ──────────────────────────────────────────────────────
+
+def save_monthly_investment(month_key: str, investments: list[dict]):
+    """
+    Save monthly investment log.
+    investments = [{"ticker": "SXR8.DE", "amount_eur": 137.50}, ...]
+    Replaces existing entries for that month.
+    """
+    conn = get_connection()
+    conn.execute("DELETE FROM monthly_investments WHERE month_key=?", (month_key,))
+    now = datetime.now().isoformat()
+    for inv in investments:
+        conn.execute(
+            "INSERT INTO monthly_investments (month_key, ticker, amount_eur, created_at) VALUES (?, ?, ?, ?)",
+            (month_key, inv["ticker"], float(inv.get("amount_eur", 0)), now),
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_monthly_investments(month_key: str = None) -> list[dict]:
+    """Get investment logs. If month_key given, filter by month."""
+    conn = get_connection()
+    if month_key:
+        rows = conn.execute(
+            "SELECT * FROM monthly_investments WHERE month_key=? ORDER BY id", (month_key,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM monthly_investments ORDER BY month_key DESC, id"
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_monthly_investment_totals() -> list[dict]:
+    """Get total invested per month."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT month_key, SUM(amount_eur) as total FROM monthly_investments GROUP BY month_key ORDER BY month_key DESC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_total_invested_all_time() -> float:
+    """Get total amount invested across all months."""
+    conn = get_connection()
+    row = conn.execute("SELECT SUM(amount_eur) as total FROM monthly_investments").fetchone()
+    conn.close()
+    return float((row["total"] if row else 0) or 0)
+
+
+def delete_monthly_investment(month_key: str):
+    """Delete all investment entries for a given month."""
+    conn = get_connection()
+    conn.execute("DELETE FROM monthly_investments WHERE month_key=?", (month_key,))
+    conn.commit()
+    conn.close()
 
 
 # ── SENTINEL ─────────────────────────────────────────────────────────────────

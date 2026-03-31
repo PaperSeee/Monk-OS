@@ -9,7 +9,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from db.database import init_db, get_latest_portfolio_v2, save_portfolio_v2, get_setting
+from db.database import (
+    init_db, get_latest_portfolio_v2, save_portfolio_v2, get_setting,
+    save_monthly_investment, get_monthly_investments, get_monthly_investment_totals,
+    get_total_invested_all_time, delete_monthly_investment,
+)
 from utils.helpers import (
     inject_css, section_head, sub_label, plotly_theme,
     ETF_CATALOG, ETF_YIELD, fmt, get_fx_rates, render_long_term_sidebar_nav,
@@ -111,7 +115,7 @@ if "etf_rows" not in st.session_state:
             {"ticker": "SXR8.DE", "shares": 0.0, "target_pct": 55.0},
             {"ticker": "IUSN.DE", "shares": 0.0, "target_pct": 20.0},
             {"ticker": "IS3N.DE", "shares": 0.0, "target_pct": 15.0},
-            {"ticker": "EXSC.DE", "shares": 0.0, "target_pct": 10.0},
+            {"ticker": "MEUD.PA", "shares": 0.0, "target_pct": 10.0},
         ]
 
 # ── ETF SELECTOR ─────────────────────────────────────────────────────────────
@@ -509,3 +513,123 @@ if total_eur > 0:
         '</div>'
     )
     st.markdown(div_card, unsafe_allow_html=True)
+
+st.divider()
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  JOURNAL D'INVESTISSEMENT MENSUEL
+# ══════════════════════════════════════════════════════════════════════════════
+sub_label("Journal d'investissement — Log tes achats mensuels")
+
+from datetime import date as _date, datetime as _dt
+
+# Month selector
+now = _date.today()
+month_options = []
+for offset in range(12):
+    m = now.month - offset
+    y = now.year
+    while m <= 0:
+        m += 12
+        y -= 1
+    month_options.append(f"{y}-{m:02d}")
+
+col_month, col_action, _ = st.columns([1, 1, 2])
+with col_month:
+    selected_month = st.selectbox("Mois", month_options, index=0, key="inv_month")
+
+# Show current allocation for this month
+st.markdown(
+    '<div style="font-size:0.72rem;color:#8892AA;margin-bottom:0.5rem;">'
+    'Les montants sont pré-remplis selon ton allocation cible et ton montant mensuel (' + fmt(invest_amount_eur, ccy, rates) + ').'
+    ' Ajuste si besoin puis clique Enregistrer.</div>',
+    unsafe_allow_html=True,
+)
+
+# Pre-fill amounts based on allocation
+existing = get_monthly_investments(selected_month)
+existing_map = {inv["ticker"]: inv["amount_eur"] for inv in existing}
+
+inv_amounts = {}
+for i, r in enumerate(st.session_state.etf_rows):
+    tk = r["ticker"]
+    default_val = existing_map.get(tk, invest_amount_eur * (r["target_pct"] / 100))
+    cols = st.columns([2, 1.5, 1])
+    with cols[0]:
+        name = ETF_CATALOG.get(tk, tk)
+        st.markdown(
+            '<div style="padding-top:0.7rem;font-size:0.82rem;color:#F0F4FF;font-family:JetBrains Mono,monospace;">'
+            + tk + '<span style="color:#4A5568;font-size:0.65rem;margin-left:0.4rem;">(' + name[:30] + ')</span></div>',
+            unsafe_allow_html=True,
+        )
+    with cols[1]:
+        inv_amounts[tk] = st.number_input(
+            f"Montant {tk}", min_value=0.0, value=float(default_val),
+            step=10.0, format="%.2f", key=f"inv_amt_{i}",
+            label_visibility="collapsed",
+        )
+    with cols[2]:
+        pr = prices_cache.get(tk, 0)
+        pts = inv_amounts[tk] / pr if pr > 0 else 0
+        st.markdown(
+            '<div style="padding-top:0.7rem;font-size:0.78rem;color:#10B981;font-family:JetBrains Mono,monospace;">'
+            + f'{pts:.4f}' + ' parts</div>',
+            unsafe_allow_html=True,
+        )
+
+total_month = sum(inv_amounts.values())
+st.markdown(
+    '<div style="font-size:0.82rem;color:#F0F4FF;margin-top:0.3rem;">'
+    'Total ce mois : <span style="color:#3B82F6;font-weight:700;font-family:JetBrains Mono,monospace;">'
+    + fmt(total_month, ccy, rates) + '</span></div>',
+    unsafe_allow_html=True,
+)
+
+with col_action:
+    if st.button("✅ Enregistrer ce mois", key="save_inv"):
+        investments = [{"ticker": tk, "amount_eur": amt} for tk, amt in inv_amounts.items() if amt > 0]
+        save_monthly_investment(selected_month, investments)
+        st.success(f"✓ Investissement de {selected_month} enregistré !")
+        st.rerun()
+
+# History
+st.markdown("<br>", unsafe_allow_html=True)
+all_totals = get_monthly_investment_totals()
+if all_totals:
+    total_all_time = get_total_invested_all_time()
+    history_rows = ""
+    for mt in all_totals:
+        mk = mt["month_key"]
+        details = get_monthly_investments(mk)
+        detail_str = " · ".join([d["ticker"] + " " + fmt(d["amount_eur"], ccy, rates) for d in details])
+        history_rows += (
+            '<div class="info-row">'
+            '<span class="info-key" style="color:#F0F4FF;font-family:JetBrains Mono,monospace;">'
+            + mk + '</span>'
+            '<span class="info-value">'
+            '<span style="color:#3B82F6;font-weight:700;">' + fmt(mt["total"], ccy, rates) + '</span>'
+            '<span style="color:#4A5568;font-size:0.65rem;margin-left:0.4rem;">' + detail_str + '</span>'
+            '</span></div>'
+        )
+
+    hist_card = (
+        '<div class="monk-card">'
+        '<div class="monk-card-title">Historique des investissements</div>'
+        + history_rows +
+        '<div class="info-row" style="border-top:1px solid #2D3447;padding-top:0.5rem;margin-top:0.3rem;">'
+        '<span class="info-key">Total investi (all-time)</span>'
+        '<span class="info-value" style="color:#10B981;font-size:1rem;font-weight:700;">'
+        + fmt(total_all_time, ccy, rates) + '</span></div></div>'
+    )
+    st.markdown(hist_card, unsafe_allow_html=True)
+
+    # Delete option
+    col_del_month, col_del_btn, _ = st.columns([1, 1, 2])
+    with col_del_month:
+        del_month = st.selectbox("Supprimer un mois", [m["month_key"] for m in all_totals], key="del_inv_month")
+    with col_del_btn:
+        st.markdown("<div style='padding-top:0.5rem;'></div>", unsafe_allow_html=True)
+        if st.button("🗑 Supprimer", key="del_inv_btn"):
+            delete_monthly_investment(del_month)
+            st.success(f"✓ Investissement {del_month} supprimé.")
+            st.rerun()
