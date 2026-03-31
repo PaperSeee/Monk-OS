@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from db.database import init_db, get_setting, get_lt_capital, get_latest_portfolio_total_value
+from db.database import init_db, get_setting, get_lt_capital, get_live_portfolio_value
 from utils.helpers import inject_css, section_head, sub_label, plotly_theme, fmt, get_fx_rates, render_long_term_sidebar_nav
 
 st.set_page_config(
@@ -29,7 +29,7 @@ section_head("MODULE 03 — FREEDOM SIMULATOR V2")
 ccy   = st.session_state.get("currency", "EUR")
 rates = get_fx_rates() if ccy != "EUR" else {"EUR": 1.0}
 
-default_savings = get_lt_capital() + get_latest_portfolio_total_value()
+default_savings = get_lt_capital() + get_live_portfolio_value()
 default_monthly = float(get_setting("monthly_budget", "1250"))
 
 sub_label("Paramètres de simulation")

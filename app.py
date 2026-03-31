@@ -16,7 +16,8 @@ from db.database import (
     get_setting,
     set_setting,
     get_lt_capital,
-    get_latest_portfolio_total_value,
+    get_live_portfolio_value,
+    get_total_invested_all_time,
     get_risk_crypto_current_value,
     get_prop_challenges,
     get_business_tests,
@@ -157,7 +158,9 @@ st.markdown("<div style='margin:1rem 0; width:60px; height:3px; background:#3B82
 
 # ── LOAD AGGREGATED DATA FROM ALL 3 PILLARS ───────────────────────────────
 lt_cash_capital = get_lt_capital()
-etf_portfolio_value = get_latest_portfolio_total_value()
+etf_live_value = get_live_portfolio_value()
+etf_invested = get_total_invested_all_time()
+etf_gain = etf_live_value - etf_invested
 live_crypto_value = get_risk_crypto_current_value()
 challenges = get_prop_challenges()
 tests = get_business_tests()
@@ -173,7 +176,7 @@ funded_live = sum(
     if c.get("status") in ["En cours", "Passé"]
 )
 
-inv_bourse = etf_portfolio_value
+inv_bourse = etf_live_value
 inv_crypto = live_crypto_value
 inv_immo = float(get_setting("lt_invest_immo", "0"))
 total_invest = inv_bourse + inv_crypto + inv_immo
@@ -187,12 +190,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-kpi_cols = st.columns(4)
-kpi_cols[0].metric("💎 Capital Global (LT)", fmt(lt_capital, ccy, r))
-kpi_cols[1].metric("🚀 Funded (MT)", fmt(funded_live, ccy, r))
-kpi_cols[2].metric("📊 Investis (Risque)", fmt(risk_totals['total_invested'], ccy, r))
-gain_loss_emoji = "🟢" if risk_totals['gain_loss'] >= 0 else "🔴"
-kpi_cols[3].metric(f"{gain_loss_emoji} Gains/Pertes", fmt(risk_totals['gain_loss'], ccy, r))
+kpi_cols = st.columns(5)
+kpi_cols[0].metric("💎 Épargne (Cash)", fmt(lt_cash_capital, ccy, r))
+kpi_cols[1].metric("📈 ETF (Live)", fmt(etf_live_value, ccy, r))
+etf_delta = f"{'+' if etf_gain >= 0 else ''}{fmt(etf_gain, ccy, r)}"
+kpi_cols[2].metric("📊 P&L ETF", etf_delta)
+kpi_cols[3].metric("🚀 Funded (MT)", fmt(funded_live, ccy, r))
+risk_emoji = "🟢" if risk_totals['gain_loss'] >= 0 else "🔴"
+kpi_cols[4].metric(f"{risk_emoji} Risque P&L", fmt(risk_totals['gain_loss'], ccy, r))
 
 st.divider()
 
@@ -220,13 +225,13 @@ with nav_cols[0]:
             </div>
             <hr style="border-color:#232836; margin:0.5rem 0;">
             <div style="font-size:0.65rem; color:#8892AA;">
-                Invest.: {fmt(total_invest, ccy, r)}
+                Cash: {fmt(lt_cash_capital, ccy, r)} · ETF: {fmt(etf_live_value, ccy, r)}
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     if st.button("Ouvrir", key="btn_lt", use_container_width=True):
-        st.switch_page("pages/_1_LT_Epargne.py")
+        st.switch_page("pages/2_📈_Equity_Engine.py")
 
 # MT Card
 with nav_cols[1]:

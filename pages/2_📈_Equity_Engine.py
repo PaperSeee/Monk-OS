@@ -586,8 +586,14 @@ st.markdown(
 )
 
 with col_action:
+    st.markdown("<div style='padding-top:1.6rem;'></div>", unsafe_allow_html=True)
     if st.button("✅ Enregistrer ce mois", key="save_inv"):
-        investments = [{"ticker": tk, "amount_eur": amt} for tk, amt in inv_amounts.items() if amt > 0]
+        investments = []
+        for tk, amt in inv_amounts.items():
+            if amt > 0:
+                pr = prices_cache.get(tk, 0)
+                pts = amt / pr if pr > 0 else 0
+                investments.append({"ticker": tk, "amount_eur": amt, "buy_price": pr, "parts": pts})
         save_monthly_investment(selected_month, investments)
         st.success(f"✓ Investissement de {selected_month} enregistré !")
         st.rerun()

@@ -160,10 +160,19 @@ def init_db():
             month_key   TEXT NOT NULL,
             ticker      TEXT NOT NULL,
             amount_eur  REAL DEFAULT 0,
+            buy_price   REAL DEFAULT 0,
+            parts       REAL DEFAULT 0,
             created_at  TEXT NOT NULL,
             note        TEXT DEFAULT ''
         )
     """)
+
+    # Migrate monthly_investments: add buy_price/parts if missing
+    for col in ["buy_price REAL DEFAULT 0", "parts REAL DEFAULT 0"]:
+        try:
+            c.execute(f"ALTER TABLE monthly_investments ADD COLUMN {col}")
+        except Exception:
+            pass
 
     # Migrate tax_pocket_entries: add source column if missing
     try:
@@ -405,12 +414,45 @@ def get_latest_portfolio_total_value() -> float:
     return get_total_invested_all_time()
 
 
+def get_portfolio_holdings() -> dict:
+    """Returns total parts held per ticker from all monthly investments."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT ticker, SUM(parts) as total_parts, SUM(amount_eur) as total_invested "
+        "FROM monthly_investments GROUP BY ticker"
+    ).fetchall()
+    conn.close()
+    return {r["ticker"]: {"parts": float(r["total_parts"] or 0), "invested": float(r["total_invested"] or 0)} for r in rows}
+
+
+def get_live_portfolio_value() -> float:
+    """Fetch live portfolio value = sum(parts × current_price) for all holdings."""
+    holdings = get_portfolio_holdings()
+    if not holdings:
+        return 0.0
+    try:
+        import yfinance as yf
+        total = 0.0
+        for ticker, data in holdings.items():
+            if data["parts"] > 0:
+                try:
+                    hist = yf.Ticker(ticker).history(period="2d")
+                    if not hist.empty:
+                        price = float(hist["Close"].iloc[-1])
+                        total += data["parts"] * price
+                except Exception:
+                    total += data["invested"]  # fallback to invested amount
+        return total
+    except ImportError:
+        return get_total_invested_all_time()
+
+
 # ── MONTHLY INVESTMENTS ──────────────────────────────────────────────────────
 
 def save_monthly_investment(month_key: str, investments: list[dict]):
     """
     Save monthly investment log.
-    investments = [{"ticker": "SXR8.DE", "amount_eur": 137.50}, ...]
+    investments = [{"ticker": "SXR8.DE", "amount_eur": 137.50, "buy_price": 600.0, "parts": 0.229}, ...]
     Replaces existing entries for that month.
     """
     conn = get_connection()
@@ -418,8 +460,9 @@ def save_monthly_investment(month_key: str, investments: list[dict]):
     now = datetime.now().isoformat()
     for inv in investments:
         conn.execute(
-            "INSERT INTO monthly_investments (month_key, ticker, amount_eur, created_at) VALUES (?, ?, ?, ?)",
-            (month_key, inv["ticker"], float(inv.get("amount_eur", 0)), now),
+            "INSERT INTO monthly_investments (month_key, ticker, amount_eur, buy_price, parts, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (month_key, inv["ticker"], float(inv.get("amount_eur", 0)),
+             float(inv.get("buy_price", 0)), float(inv.get("parts", 0)), now),
         )
     conn.commit()
     conn.close()

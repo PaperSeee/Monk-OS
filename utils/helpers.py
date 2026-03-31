@@ -176,7 +176,7 @@ def render_pillar_top_nav(current_page: str):
     """Render a compact top-right custom menu for Dashboard/LT/MT/CT pages."""
     items = {
         "app": ("🏠 Dashboard", "app.py"),
-        "lt": ("🏰 LT Épargne", "pages/_1_LT_Epargne.py"),
+        "lt": ("🏰 LT Épargne", "pages/2_📈_Equity_Engine.py"),
         "mt": ("📈 MT Trading", "pages/_2_MT_Trading.py"),
         "ct": ("💰 CT Business", "pages/_3_CT_Business.py"),
     }
@@ -201,7 +201,6 @@ def render_pillar_top_nav(current_page: str):
 def render_modules_quick_menu(key_suffix: str = "default"):
     """Render quick access to classic MONK-OS module pages."""
     module_items = {
-        "🏰 LT Épargne (Pillar)": "pages/_1_LT_Epargne.py",
         "🏰 Fortress One": "pages/1_🏰_Fortress_One.py",
         "📈 Equity Engine": "pages/2_📈_Equity_Engine.py",
         "🔮 Freedom Simulator": "pages/3_🔮_Freedom_Simulator.py",
