@@ -100,7 +100,6 @@ def fetch_history_multi(tickers: list) -> dict:
 
 # ── ETF Row State ─────────────────────────────────────────────────────────────
 if "etf_rows" not in st.session_state:
-    # Load from DB or default
     saved = get_latest_portfolio_v2()
     if saved:
         st.session_state.etf_rows = [
@@ -135,13 +134,14 @@ st.markdown("""
 
 rows_to_delete = []
 prices_cache   = {}
+palette = ["#3B82F6","#10B981","#8B5CF6","#F59E0B","#EF4444",
+           "#06B6D4","#EC4899","#84CC16","#F97316","#A78BFA"]
 
 for i, row in enumerate(st.session_state.etf_rows):
     with st.container():
         col_t, col_pct, col_price, col_buy, col_parts, col_del = st.columns([2.8, 1, 1.2, 1.2, 1.2, 0.4])
 
         with col_t:
-            # Find index in catalog or allow custom
             options_display = ticker_labels if row["ticker"] in all_tickers else [f"{row['ticker']} — Custom"] + ticker_labels
             chosen_label    = st.selectbox(
                 f"ETF {i+1}",
@@ -150,7 +150,6 @@ for i, row in enumerate(st.session_state.etf_rows):
                 key=f"etf_select_{i}",
                 label_visibility="collapsed",
             )
-            # Parse ticker from label
             new_ticker = chosen_label.split(" — ")[0].strip()
             if new_ticker != row["ticker"]:
                 st.session_state.etf_rows[i]["ticker"] = new_ticker
@@ -163,7 +162,6 @@ for i, row in enumerate(st.session_state.etf_rows):
             )
             st.session_state.etf_rows[i]["target_pct"] = new_pct
 
-        # Fetch price & calculate buy amount
         ticker   = st.session_state.etf_rows[i]["ticker"]
         price_eur = fetch_price(ticker) or 0.0
         prices_cache[ticker] = price_eur
@@ -173,28 +171,25 @@ for i, row in enumerate(st.session_state.etf_rows):
         buy_parts = buy_eur / price_eur if price_eur > 0 else 0
 
         with col_price:
-            st.markdown(f"""
-            <div style="padding-top:0.9rem; font-size:0.85rem; font-weight:600;
-                        color:#F0F4FF; font-family:'JetBrains Mono',monospace;">
-                {price_display}
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="padding-top:0.9rem;font-size:0.85rem;font-weight:600;'
+                f'color:#F0F4FF;font-family:JetBrains Mono,monospace;">{price_display}</div>',
+                unsafe_allow_html=True,
+            )
 
         with col_buy:
-            st.markdown(f"""
-            <div style="padding-top:0.9rem; font-size:0.88rem; font-weight:700;
-                        color:#3B82F6; font-family:'JetBrains Mono',monospace;">
-                {fmt(buy_eur, ccy, rates)}
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="padding-top:0.9rem;font-size:0.88rem;font-weight:700;'
+                f'color:#3B82F6;font-family:JetBrains Mono,monospace;">{fmt(buy_eur, ccy, rates)}</div>',
+                unsafe_allow_html=True,
+            )
 
         with col_parts:
-            st.markdown(f"""
-            <div style="padding-top:0.9rem; font-size:0.85rem; font-weight:600;
-                        color:#10B981; font-family:'JetBrains Mono',monospace;">
-                {buy_parts:.4f}
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="padding-top:0.9rem;font-size:0.85rem;font-weight:600;'
+                f'color:#10B981;font-family:JetBrains Mono,monospace;">{buy_parts:.4f}</div>',
+                unsafe_allow_html=True,
+            )
 
         with col_del:
             st.markdown("<div style='padding-top:0.5rem;'></div>", unsafe_allow_html=True)
@@ -209,7 +204,7 @@ if rows_to_delete:
 
 # ── Buttons: Add ETF + Save ───────────────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
-col_add, col_save, col_refresh, col_spacer = st.columns([1, 1, 1, 2])
+col_add, col_save, col_refresh, col_spacer2 = st.columns([1, 1, 1, 2])
 
 with col_add:
     if st.button("➕  Ajouter un ETF"):
@@ -220,7 +215,7 @@ with col_save:
     if st.button("💾  Sauvegarder"):
         db_rows = [
             {"ticker": r["ticker"],
-             "shares": r["shares"],
+             "shares": r.get("shares", 0),
              "price": prices_cache.get(r["ticker"], 0),
              "target_pct": r["target_pct"]}
             for r in st.session_state.etf_rows
@@ -238,15 +233,17 @@ total_target = sum(r["target_pct"] for r in st.session_state.etf_rows)
 if abs(total_target - 100) > 0.1:
     st.warning(f"⚠ L'allocation cible totalise **{total_target:.1f}%** (doit être 100%). Ajuste tes %, CEO.")
 else:
-    st.markdown(f"""
-    <div style="font-size:0.72rem; color:#10B981; font-weight:500; margin-top:0.3rem;">
-        ✓ Allocation validée : {total_target:.1f}%
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="font-size:0.72rem;color:#10B981;font-weight:500;margin-top:0.3rem;">'
+        f'✓ Allocation validée : {total_target:.1f}%</div>',
+        unsafe_allow_html=True,
+    )
 
 st.divider()
 
-# ── Portfolio Summary ─────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  SYNTHÈSE DE L'ALLOCATION
+# ══════════════════════════════════════════════════════════════════════════════
 sub_label("Synthèse de l'allocation mensuelle")
 
 total_eur = invest_amount_eur
@@ -255,31 +252,26 @@ if total_eur > 0:
     col_donut, col_summary = st.columns([1.3, 1])
 
     with col_donut:
-        labels, values, colors_list = [], [], []
-        palette = ["#3B82F6","#10B981","#8B5CF6","#F59E0B","#EF4444",
-                   "#06B6D4","#EC4899","#84CC16","#F97316","#A78BFA"]
-
+        chart_labels, chart_values, chart_colors = [], [], []
         for idx, r in enumerate(st.session_state.etf_rows):
-            alloc_eur = total_eur * (r["target_pct"] / 100)
-            if alloc_eur > 0:
-                etf_name = ETF_CATALOG.get(r["ticker"], r["ticker"])
-                labels.append(r["ticker"])
-                values.append(alloc_eur)
-                colors_list.append(palette[idx % len(palette)])
+            alloc = total_eur * (r["target_pct"] / 100)
+            if alloc > 0:
+                chart_labels.append(r["ticker"])
+                chart_values.append(alloc)
+                chart_colors.append(palette[idx % len(palette)])
 
         fig = go.Figure()
         fig.add_trace(go.Pie(
-            labels=labels, values=values,
+            labels=chart_labels, values=chart_values,
             hole=0.60,
-            marker=dict(colors=colors_list, line=dict(color="#161A22", width=3)),
+            marker=dict(colors=chart_colors, line=dict(color="#161A22", width=3)),
             textfont=dict(family="Inter", size=11, color="#F0F4FF"),
             texttemplate="%{label}<br><b>%{percent}</b>",
             textposition="outside",
             showlegend=True,
         ))
-        theme = plotly_theme()
         fig.update_layout(
-            **theme,
+            **plotly_theme(),
             margin=dict(t=20, b=30, l=20, r=20), height=320,
             legend=dict(font=dict(family="Inter", size=10, color="#8892AA"),
                         bgcolor="rgba(0,0,0,0)",
@@ -296,46 +288,80 @@ if total_eur > 0:
     with col_summary:
         st.markdown("<br>", unsafe_allow_html=True)
         rows_html = ""
-        for idx, r in enumerate(st.session_state.etf_rows):
-            alloc_eur = total_eur * (r["target_pct"] / 100)
-            price_eur = prices_cache.get(r["ticker"], 0)
-            parts = alloc_eur / price_eur if price_eur > 0 else 0
-            etf_name = ETF_CATALOG.get(r["ticker"], r["ticker"])
-            rows_html += f"""
-            <div class="info-row">
-                <span class="info-key">
-                    <span style="color:#F0F4FF;">{r["ticker"]}</span>
-                    <span style="color:#4A5568; font-size:0.65rem; margin-left:0.3rem;">({r['target_pct']:.0f}%)</span>
-                </span>
-                <span style="font-size:0.78rem; font-family:'JetBrains Mono',monospace;">
-                    <span style="color:#3B82F6; font-weight:700;">{fmt(alloc_eur, ccy, rates)}</span>
-                    <span style="color:#4A5568; font-size:0.68rem; margin-left:0.3rem;">
-                        · {parts:.4f} parts
-                    </span>
-                </span>
-            </div>"""
+        for r in st.session_state.etf_rows:
+            tk = r["ticker"]
+            pct = r["target_pct"]
+            alloc = total_eur * (pct / 100)
+            pr = prices_cache.get(tk, 0)
+            pts = alloc / pr if pr > 0 else 0
+            rows_html += (
+                '<div class="info-row">'
+                '<span class="info-key">'
+                '<span style="color:#F0F4FF;">' + tk + '</span>'
+                '<span style="color:#4A5568;font-size:0.65rem;margin-left:0.3rem;">(' + f'{pct:.0f}' + '%)</span>'
+                '</span>'
+                '<span style="font-size:0.78rem;font-family:JetBrains Mono,monospace;">'
+                '<span style="color:#3B82F6;font-weight:700;">' + fmt(alloc, ccy, rates) + '</span>'
+                '<span style="color:#4A5568;font-size:0.68rem;margin-left:0.3rem;"> · ' + f'{pts:.4f}' + ' parts</span>'
+                '</span>'
+                '</div>'
+            )
 
-        st.markdown(f"""
-        <div class="monk-card">
-            <div class="monk-card-title">Répartition mensuelle</div>
-            {rows_html}
-            <div class="info-row" style="margin-top:0.5rem; border-top:1px solid #232836; padding-top:0.5rem;">
-                <span class="info-key">Total mensuel</span>
-                <span class="info-value" style="color:#10B981;">{fmt(total_eur, ccy, rates)}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        card_html = (
+            '<div class="monk-card">'
+            '<div class="monk-card-title">Répartition mensuelle</div>'
+            + rows_html +
+            '<div class="info-row" style="margin-top:0.5rem;border-top:1px solid #232836;padding-top:0.5rem;">'
+            '<span class="info-key">Total mensuel</span>'
+            '<span class="info-value" style="color:#10B981;">' + fmt(total_eur, ccy, rates) + '</span>'
+            '</div></div>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
 
 st.divider()
 
-# ── Performance Chart ─────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  ETF RECAP CARDS — Prix live & investissement
+# ══════════════════════════════════════════════════════════════════════════════
+sub_label("Récap par ETF — Prix live & investissement mensuel")
+
+etf_cols = st.columns(len(st.session_state.etf_rows))
+for idx, r in enumerate(st.session_state.etf_rows):
+    tk = r["ticker"]
+    pct = r["target_pct"]
+    price = prices_cache.get(tk, 0)
+    alloc = total_eur * (pct / 100)
+    parts = alloc / price if price > 0 else 0
+    name = ETF_CATALOG.get(tk, tk)
+    color = palette[idx % len(palette)]
+
+    with etf_cols[idx]:
+        st.markdown(
+            '<div style="background:#1A1F2E;border-radius:12px;padding:1rem;border-left:3px solid ' + color + ';">'
+            '<div style="font-size:0.9rem;font-weight:700;color:#F0F4FF;font-family:JetBrains Mono,monospace;">' + tk + '</div>'
+            '<div style="font-size:0.62rem;color:#4A5568;margin-top:0.15rem;line-height:1.4;">' + name + '</div>'
+            '<div style="margin-top:0.8rem;">'
+            '<div style="font-size:0.6rem;color:#4A5568;text-transform:uppercase;letter-spacing:0.1em;">Prix live</div>'
+            '<div style="font-size:1.1rem;font-weight:700;color:#F0F4FF;font-family:JetBrains Mono,monospace;">' + fmt(price, ccy, rates) + '</div>'
+            '</div>'
+            '<div style="margin-top:0.6rem;">'
+            '<div style="font-size:0.6rem;color:#4A5568;text-transform:uppercase;letter-spacing:0.1em;">Allocation (' + f'{pct:.0f}' + '%)</div>'
+            '<div style="font-size:0.95rem;font-weight:700;color:' + color + ';font-family:JetBrains Mono,monospace;">' + fmt(alloc, ccy, rates) + '</div>'
+            '<div style="font-size:0.72rem;color:#8892AA;font-family:JetBrains Mono,monospace;">' + f'{parts:.4f}' + ' parts</div>'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+
+st.divider()
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PERFORMANCE 3 MOIS
+# ══════════════════════════════════════════════════════════════════════════════
 active_tickers = list({r["ticker"] for r in st.session_state.etf_rows if prices_cache.get(r["ticker"])})
 if active_tickers:
     sub_label("Performance 3 mois (base 100)")
     hist_data = fetch_history_multi(tuple(active_tickers))
     if hist_data:
-        palette = ["#3B82F6","#10B981","#8B5CF6","#F59E0B","#EF4444",
-                   "#06B6D4","#EC4899","#84CC16"]
         fig2 = go.Figure()
         for i, (ticker, series) in enumerate(hist_data.items()):
             norm = series / series.iloc[0] * 100
@@ -356,51 +382,130 @@ if active_tickers:
 
 st.divider()
 
-# ── Dividend Tracker ──────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  PROJECTION MULTI-SCÉNARIOS
+# ══════════════════════════════════════════════════════════════════════════════
+sub_label("Projection — Combien vaudra ton portefeuille ?")
+
+col_years, _ = st.columns([1, 2])
+with col_years:
+    projection_years = st.slider("Horizon (années)", min_value=1, max_value=30, value=10, step=1)
+
+monthly_invest = total_eur
+scenarios = {
+    "Pessimiste (4%/an)": 0.04,
+    "Modéré (7%/an)": 0.07,
+    "Optimiste (10%/an)": 0.10,
+}
+scenario_colors = {"Pessimiste (4%/an)": "#EF4444", "Modéré (7%/an)": "#F59E0B", "Optimiste (10%/an)": "#10B981"}
+
+if monthly_invest > 0:
+    fig3 = go.Figure()
+    final_values = {}
+    months = projection_years * 12
+
+    for sc_name, annual_rate in scenarios.items():
+        monthly_rate = (1 + annual_rate) ** (1/12) - 1
+        values = []
+        cumul = 0.0
+        for m in range(months + 1):
+            if m > 0:
+                cumul = (cumul + monthly_invest) * (1 + monthly_rate)
+            values.append(cumul)
+
+        years_axis = [m / 12 for m in range(months + 1)]
+        final_values[sc_name] = values[-1]
+
+        fig3.add_trace(go.Scatter(
+            x=years_axis, y=values, name=sc_name,
+            line=dict(color=scenario_colors[sc_name], width=2),
+            hovertemplate="<b>" + sc_name + "</b><br>Année %{x:.1f}<br>Valeur: %{y:,.0f}€<extra></extra>",
+        ))
+
+    # Capital investi line
+    invested_vals = [monthly_invest * m for m in range(months + 1)]
+    fig3.add_trace(go.Scatter(
+        x=[m / 12 for m in range(months + 1)], y=invested_vals,
+        name="Capital investi",
+        line=dict(color="#4A5568", width=1, dash="dash"),
+        hovertemplate="<b>Capital investi</b><br>%{y:,.0f}€<extra></extra>",
+    ))
+
+    fig3.update_layout(
+        **plotly_theme(), height=350,
+        margin=dict(t=10, b=40, l=50, r=10),
+        yaxis_title="Valeur (€)", xaxis_title="Années",
+        hovermode="x unified",
+        legend=dict(x=0.02, y=0.98, font=dict(size=10, family="Inter", color="#8892AA"),
+                    bgcolor="rgba(0,0,0,0)"),
+    )
+    st.plotly_chart(fig3, use_container_width=True)
+
+    # Scenario summary cards
+    total_invested_final = monthly_invest * months
+    sc_cols = st.columns(3)
+    for idx_s, (sc_name, sc_val) in enumerate(final_values.items()):
+        gain = sc_val - total_invested_final
+        gain_pct = (gain / total_invested_final * 100) if total_invested_final > 0 else 0
+        color = list(scenario_colors.values())[idx_s]
+        with sc_cols[idx_s]:
+            st.markdown(
+                '<div style="background:#1A1F2E;border-radius:12px;padding:1rem;text-align:center;border-top:3px solid ' + color + ';">'
+                '<div style="font-size:0.65rem;color:#4A5568;text-transform:uppercase;letter-spacing:0.1em;">' + sc_name + '</div>'
+                '<div style="font-size:1.3rem;font-weight:800;color:' + color + ';font-family:JetBrains Mono,monospace;margin-top:0.4rem;">' + fmt(sc_val, ccy, rates) + '</div>'
+                '<div style="font-size:0.72rem;color:#8892AA;margin-top:0.3rem;">+' + fmt(gain, ccy, rates) + ' (' + f'{gain_pct:+.1f}' + '%)</div>'
+                '<div style="font-size:0.6rem;color:#4A5568;margin-top:0.3rem;">sur ' + fmt(total_invested_final, ccy, rates) + ' investi</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+st.divider()
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  DIVIDEND TRACKER
+# ══════════════════════════════════════════════════════════════════════════════
 sub_label("Dividend Tracker — Rendement théorique (positions ACC réinvesties)")
 
 if total_eur > 0:
     div_rows = ""
     total_annual_div = 0.0
     for r in st.session_state.etf_rows:
-        ticker    = r["ticker"]
-        val       = total_eur * (r["target_pct"] / 100)
-        yld       = ETF_YIELD.get(ticker, 1.5) / 100
-        # Annual yield on monthly investment (×12 for full year of DCA)
+        tk = r["ticker"]
+        val = total_eur * (r["target_pct"] / 100)
+        yld_pct = ETF_YIELD.get(tk, 1.5)
+        yld = yld_pct / 100
         annual_val = val * 12
         annual_div = annual_val * yld
         monthly_div = annual_div / 12
         total_annual_div += annual_div
-        div_rows += f"""
-        <div class="info-row">
-            <span class="info-key">
-                <span style="color:#F0F4FF; font-family:'JetBrains Mono',monospace;">{ticker}</span>
-                <span style="color:#4A5568; font-size:0.7rem; margin-left:0.3rem;">
-                    ({ETF_YIELD.get(ticker, 1.5):.1f}% yield estimé)
-                </span>
-            </span>
-            <span class="info-value">
-                {fmt(annual_div, ccy, rates)}/an
-                <span style="color:#4A5568; font-size:0.72rem;"> · {fmt(monthly_div, ccy, rates)}/mois</span>
-            </span>
-        </div>"""
+        div_rows += (
+            '<div class="info-row">'
+            '<span class="info-key">'
+            '<span style="color:#F0F4FF;font-family:JetBrains Mono,monospace;">' + tk + '</span>'
+            '<span style="color:#4A5568;font-size:0.7rem;margin-left:0.3rem;">(' + f'{yld_pct:.1f}' + '% yield)</span>'
+            '</span>'
+            '<span class="info-value">'
+            + fmt(annual_div, ccy, rates) + '/an'
+            '<span style="color:#4A5568;font-size:0.72rem;"> · ' + fmt(monthly_div, ccy, rates) + '/mois</span>'
+            '</span>'
+            '</div>'
+        )
 
-    st.markdown(f"""
-    <div class="monk-card">
-        <div class="monk-card-title">Dividendes théoriques (réinvestis automatiquement)</div>
-        <div style="font-size:0.62rem; color:#4A5568; margin-bottom:0.6rem;">
-            Basé sur {fmt(total_eur, ccy, rates)}/mois × 12 = {fmt(total_eur * 12, ccy, rates)}/an investi
-        </div>
-        {div_rows}
-        <div class="info-row" style="border-top:1px solid #2D3447; padding-top:0.5rem; margin-top:0.3rem;">
-            <span class="info-key">Total annuel estimé</span>
-            <span class="info-value" style="color:#10B981; font-size:1rem;">
-                {fmt(total_annual_div, ccy, rates)}/an
-            </span>
-        </div>
-        <div style="font-size:0.68rem; color:#4A5568; margin-top:0.8rem; line-height:1.6;">
-            ⓘ Ces ETFs sont ACC (accumulants) — les dividendes sont réinvestis automatiquement,
-            non versés. Ces chiffres représentent la croissance implicite incluse dans le prix.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    base_info = fmt(total_eur, ccy, rates) + "/mois × 12 = " + fmt(total_eur * 12, ccy, rates) + "/an investi"
+
+    div_card = (
+        '<div class="monk-card">'
+        '<div class="monk-card-title">Dividendes théoriques (réinvestis automatiquement)</div>'
+        '<div style="font-size:0.62rem;color:#4A5568;margin-bottom:0.6rem;">Basé sur ' + base_info + '</div>'
+        + div_rows +
+        '<div class="info-row" style="border-top:1px solid #2D3447;padding-top:0.5rem;margin-top:0.3rem;">'
+        '<span class="info-key">Total annuel estimé</span>'
+        '<span class="info-value" style="color:#10B981;font-size:1rem;">' + fmt(total_annual_div, ccy, rates) + '/an</span>'
+        '</div>'
+        '<div style="font-size:0.68rem;color:#4A5568;margin-top:0.8rem;line-height:1.6;">'
+        'ⓘ Ces ETFs sont ACC (accumulants) — les dividendes sont réinvestis automatiquement, '
+        'non versés. Ces chiffres représentent la croissance implicite incluse dans le prix.'
+        '</div>'
+        '</div>'
+    )
+    st.markdown(div_card, unsafe_allow_html=True)
