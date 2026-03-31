@@ -36,6 +36,14 @@ ccy     = st.session_state.get("currency", "EUR")
 with st.spinner("Chargement des taux de change…") if ccy != "EUR" else st.empty():
     rates = get_fx_rates() if ccy != "EUR" else {"EUR": 1.0}
 
+# ── Monthly investment amount (TOP) ───────────────────────────────────────────
+col_amt, col_spacer = st.columns([1, 2])
+with col_amt:
+    invest_amount_eur = st.number_input(
+        "💰 Montant mensuel à investir (€)", min_value=0.0, value=250.0, step=25.0,
+        help="Ton DCA mensuel — le montant est réparti automatiquement selon tes % cibles"
+    )
+
 # ── Lock System ──────────────────────────────────────────────────────────────
 current_savings = float(get_setting("current_savings", "0"))
 savings_goal    = float(get_setting("savings_goal", "2000"))
@@ -108,26 +116,32 @@ if "etf_rows" not in st.session_state:
         ]
 
 # ── ETF SELECTOR ─────────────────────────────────────────────────────────────
-sub_label("Mes positions — Portefeuille Multi-ETF")
+sub_label("Mon allocation — Portefeuille Multi-ETF")
 
 all_tickers = list(ETF_CATALOG.keys())
 ticker_labels = [f"{k} — {v}" for k, v in ETF_CATALOG.items()]
+
+# Column headers
+st.markdown("""
+<div style="display:flex; gap:0; font-size:0.6rem; color:#4A5568;
+            letter-spacing:0.1em; text-transform:uppercase; padding:0 0.2rem; margin-bottom:0.3rem;">
+    <span style="flex:2.8;">Ticker / ETF</span>
+    <span style="flex:1;">Cible %</span>
+    <span style="flex:1.2;">Prix / part</span>
+    <span style="flex:1.2;">À investir</span>
+    <span style="flex:1.2;">Parts à acheter</span>
+</div>
+""", unsafe_allow_html=True)
 
 rows_to_delete = []
 prices_cache   = {}
 
 for i, row in enumerate(st.session_state.etf_rows):
     with st.container():
-        col_t, col_s, col_pct, col_price, col_val, col_del = st.columns([2.5, 1.4, 1.2, 1.5, 1.5, 0.4])
+        col_t, col_pct, col_price, col_buy, col_parts, col_del = st.columns([2.8, 1, 1.2, 1.2, 1.2, 0.4])
 
         with col_t:
             # Find index in catalog or allow custom
-            if row["ticker"] in all_tickers:
-                t_idx = all_tickers.index(row["ticker"])
-            else:
-                t_idx = 0
-                all_tickers_ext     = [row["ticker"]] + all_tickers
-                ticker_labels_ext   = [f"{row['ticker']} — Custom"] + ticker_labels
             options_display = ticker_labels if row["ticker"] in all_tickers else [f"{row['ticker']} — Custom"] + ticker_labels
             chosen_label    = st.selectbox(
                 f"ETF {i+1}",
@@ -141,14 +155,6 @@ for i, row in enumerate(st.session_state.etf_rows):
             if new_ticker != row["ticker"]:
                 st.session_state.etf_rows[i]["ticker"] = new_ticker
 
-        with col_s:
-            new_shares = st.number_input(
-                "Parts", min_value=0.0, value=float(row["shares"]),
-                step=0.5, format="%.2f",
-                key=f"shares_{i}", label_visibility="collapsed",
-            )
-            st.session_state.etf_rows[i]["shares"] = new_shares
-
         with col_pct:
             new_pct = st.number_input(
                 "Cible %", min_value=0.0, max_value=100.0,
@@ -157,13 +163,14 @@ for i, row in enumerate(st.session_state.etf_rows):
             )
             st.session_state.etf_rows[i]["target_pct"] = new_pct
 
-        # Fetch price
+        # Fetch price & calculate buy amount
         ticker   = st.session_state.etf_rows[i]["ticker"]
         price_eur = fetch_price(ticker) or 0.0
         prices_cache[ticker] = price_eur
         price_display = fmt(price_eur, ccy, rates) if price_eur else "N/A"
-        val_eur   = new_shares * price_eur
-        val_display = fmt(val_eur, ccy, rates)
+
+        buy_eur = invest_amount_eur * (new_pct / 100)
+        buy_parts = buy_eur / price_eur if price_eur > 0 else 0
 
         with col_price:
             st.markdown(f"""
@@ -171,16 +178,22 @@ for i, row in enumerate(st.session_state.etf_rows):
                         color:#F0F4FF; font-family:'JetBrains Mono',monospace;">
                 {price_display}
             </div>
-            <div style="font-size:0.6rem; color:#4A5568;">Prix / part</div>
             """, unsafe_allow_html=True)
 
-        with col_val:
+        with col_buy:
             st.markdown(f"""
-            <div style="padding-top:0.9rem; font-size:0.85rem; font-weight:700;
+            <div style="padding-top:0.9rem; font-size:0.88rem; font-weight:700;
                         color:#3B82F6; font-family:'JetBrains Mono',monospace;">
-                {val_display}
+                {fmt(buy_eur, ccy, rates)}
             </div>
-            <div style="font-size:0.6rem; color:#4A5568;">Valeur totale</div>
+            """, unsafe_allow_html=True)
+
+        with col_parts:
+            st.markdown(f"""
+            <div style="padding-top:0.9rem; font-size:0.85rem; font-weight:600;
+                        color:#10B981; font-family:'JetBrains Mono',monospace;">
+                {buy_parts:.4f}
+            </div>
             """, unsafe_allow_html=True)
 
         with col_del:
@@ -193,18 +206,6 @@ for idx in sorted(rows_to_delete, reverse=True):
     del st.session_state.etf_rows[idx]
 if rows_to_delete:
     st.rerun()
-
-# Column headers hint
-st.markdown("""
-<div style="display:flex; gap:0; font-size:0.6rem; color:#4A5568;
-            letter-spacing:0.1em; text-transform:uppercase; margin-top:-0.3rem; padding:0 0.2rem;">
-    <span style="flex:2.5;">Ticker / ETF</span>
-    <span style="flex:1.4;">Parts détenues</span>
-    <span style="flex:1.2;">Cible %</span>
-    <span style="flex:1.5;">Prix live</span>
-    <span style="flex:1.5;">Valeur</span>
-</div>
-""", unsafe_allow_html=True)
 
 # ── Buttons: Add ETF + Save ───────────────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
@@ -356,187 +357,7 @@ if active_tickers:
 
 st.divider()
 
-# ── Smart Rebalancing Calculator ──────────────────────────────────────────────
-sub_label("Calculateur de rééquilibrage — Combien acheter ce mois-ci ?")
 
-col_inv, col_mode, _ = st.columns([1, 1, 1])
-with col_inv:
-    invest_amount_eur = st.number_input(
-        "💰 Montant mensuel à investir (€)", min_value=0.0, value=250.0, step=25.0,
-        help="Ton DCA mensuel — combien tu investis ce mois-ci"
-    )
-with col_mode:
-    rebal_mode = st.selectbox(
-        "📊 Mode de calcul",
-        ["Allocation cible (DCA)", "Rééquilibrage smart"],
-        help="DCA = répartit selon tes % cibles. Smart = corrige les écarts d'allocation existants."
-    )
-
-if is_locked:
-    st.markdown("""
-    <div class="lock-overlay">
-        <div style="font-size:1.2rem; margin-bottom:0.4rem;">🔒</div>
-        <div style="color:#F59E0B; font-family:'JetBrains Mono',monospace; font-weight:700;
-                    font-size:0.8rem; letter-spacing:0.08em;">
-            INVESTISSEMENT VERROUILLÉ
-        </div>
-        <div style="color:#8892AA; font-size:0.75rem; margin-top:0.4rem;">
-            Atteins d'abord l'objectif Fortress de 2 000 €.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-elif invest_amount_eur > 0:
-    # ── Build orders ──
-    orders = []
-    total_after = total_eur + invest_amount_eur
-
-    for r in st.session_state.etf_rows:
-        ticker    = r["ticker"]
-        price_eur = prices_cache.get(ticker, 0)
-        if price_eur == 0:
-            continue
-        current_val  = r["shares"] * price_eur
-        current_pct  = (current_val / total_eur * 100) if total_eur > 0 else 0
-        target_pct   = r["target_pct"]
-        etf_name     = ETF_CATALOG.get(ticker, ticker)
-
-        if rebal_mode == "Rééquilibrage smart" and total_eur > 0:
-            # Smart: allocate more to under-weight ETFs
-            target_val = total_after * (target_pct / 100)
-            buy_eur    = max(target_val - current_val, 0)
-        else:
-            # Pure DCA: split investment by target percentages
-            buy_eur = invest_amount_eur * (target_pct / 100)
-
-        orders.append({
-            "ticker": ticker,
-            "name": etf_name,
-            "buy_eur": buy_eur,
-            "price": price_eur,
-            "target_pct": target_pct,
-            "current_pct": current_pct,
-            "current_val": current_val,
-        })
-
-    # Normalize if total buy exceeds invest amount (smart mode)
-    total_buy = sum(o["buy_eur"] for o in orders)
-    if total_buy > 0 and abs(total_buy - invest_amount_eur) > 0.01:
-        ratio = invest_amount_eur / total_buy
-        for o in orders:
-            o["buy_eur"] *= ratio
-
-    # ── Current allocation vs target (if positions exist) ──
-    if total_eur > 0:
-        alloc_html = ""
-        for o in orders:
-            dev = o["current_pct"] - o["target_pct"]
-            if abs(dev) < 2:
-                dev_color, dev_icon = "#10B981", "✓"
-            elif abs(dev) < 5:
-                dev_color, dev_icon = "#F59E0B", "⚠"
-            else:
-                dev_color, dev_icon = "#EF4444", "✗"
-
-            bar_width = min(o["current_pct"], 100)
-            target_bar = min(o["target_pct"], 100)
-
-            alloc_html += f"""
-            <div style="margin-bottom:0.8rem;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
-                    <span style="font-size:0.78rem; color:#F0F4FF; font-family:'JetBrains Mono',monospace; font-weight:600;">
-                        {o['ticker']}
-                    </span>
-                    <span style="font-size:0.68rem; color:{dev_color}; font-family:'JetBrains Mono',monospace;">
-                        {dev_icon} {o['current_pct']:.1f}% → cible {o['target_pct']:.0f}% ({'+' if dev >= 0 else ''}{dev:.1f}%)
-                    </span>
-                </div>
-                <div style="position:relative; height:6px; background:#1A1F2E; border-radius:3px; overflow:hidden;">
-                    <div style="position:absolute; height:100%; width:{bar_width}%; background:linear-gradient(90deg, #3B82F6, #60A5FA);
-                                border-radius:3px; transition:width 0.3s;"></div>
-                    <div style="position:absolute; height:100%; width:2px; left:{target_bar}%;
-                                background:#F59E0B; border-radius:1px;"></div>
-                </div>
-                <div style="font-size:0.62rem; color:#4A5568; margin-top:0.15rem;">
-                    {fmt(o['current_val'], ccy, rates)} investis
-                </div>
-            </div>"""
-
-        st.markdown(f"""
-        <div class="monk-card" style="margin-bottom:1rem;">
-            <div class="monk-card-title">Allocation actuelle vs cible</div>
-            <div style="font-size:0.62rem; color:#4A5568; margin-bottom:0.8rem;">
-                Portefeuille actuel : <span style="color:#3B82F6; font-weight:600;">{fmt(total_eur, ccy, rates)}</span>
-                — La barre jaune indique ta cible
-            </div>
-            {alloc_html}
-        </div>
-        """, unsafe_allow_html=True)
-
-    # ── Buy orders ──
-    rows_html = ""
-    for o in orders:
-        parts = o["buy_eur"] / o["price"] if o["price"] > 0 else 0
-        pct_of_invest = (o["buy_eur"] / invest_amount_eur * 100) if invest_amount_eur > 0 else 0
-        rows_html += f"""
-        <div style="display:flex; align-items:center; padding:0.7rem 0; border-bottom:1px solid #1A1F2E;">
-            <div style="flex:2.2;">
-                <div style="font-size:0.82rem; color:#F0F4FF; font-family:'JetBrains Mono',monospace; font-weight:700;">
-                    {o['ticker']}
-                </div>
-                <div style="font-size:0.65rem; color:#4A5568; margin-top:0.15rem;">
-                    {o['name']}
-                </div>
-            </div>
-            <div style="flex:1; text-align:center;">
-                <div style="font-size:0.9rem; color:#3B82F6; font-weight:700; font-family:'JetBrains Mono',monospace;">
-                    {fmt(o['buy_eur'], ccy, rates)}
-                </div>
-                <div style="font-size:0.6rem; color:#4A5568;">à investir</div>
-            </div>
-            <div style="flex:1; text-align:center;">
-                <div style="font-size:0.85rem; color:#10B981; font-weight:600; font-family:'JetBrains Mono',monospace;">
-                    {parts:.4f}
-                </div>
-                <div style="font-size:0.6rem; color:#4A5568;">parts</div>
-            </div>
-            <div style="flex:0.8; text-align:center;">
-                <div style="font-size:0.78rem; color:#8892AA; font-family:'JetBrains Mono',monospace;">
-                    {pct_of_invest:.0f}%
-                </div>
-                <div style="font-size:0.6rem; color:#4A5568;">du total</div>
-            </div>
-            <div style="flex:0.8; text-align:right;">
-                <div style="font-size:0.72rem; color:#4A5568; font-family:'JetBrains Mono',monospace;">
-                    @ {fmt(o['price'], ccy, rates)}
-                </div>
-                <div style="font-size:0.6rem; color:#4A5568;">/ part</div>
-            </div>
-        </div>"""
-
-    total_deployed = sum(o["buy_eur"] for o in orders)
-    mode_label = "DCA proportionnel" if rebal_mode == "Allocation cible (DCA)" else "Rééquilibrage smart"
-
-    st.markdown(f"""
-    <div class="rebal-result">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-            <div style="font-size:0.62rem; color:#3B82F6; letter-spacing:0.2em;
-                        text-transform:uppercase; font-weight:600;">
-                ✓ Ordres d'achat — {mode_label}
-            </div>
-            <div style="font-size:0.62rem; color:#4A5568; font-family:'JetBrains Mono',monospace;">
-                {fmt(invest_amount_eur, ccy, rates)} à déployer
-            </div>
-        </div>
-        {rows_html}
-        <div style="display:flex; justify-content:space-between; align-items:center;
-                    border-top:1px solid #232836; padding-top:0.7rem; margin-top:0.3rem;">
-            <span style="font-size:0.78rem; color:#8892AA; font-weight:600;">Total déployé</span>
-            <span style="font-size:0.92rem; color:#10B981; font-weight:700; font-family:'JetBrains Mono',monospace;">
-                {fmt(total_deployed, ccy, rates)} / {fmt(invest_amount_eur, ccy, rates)}
-            </span>
-        </div>
-    </div>
-        """, unsafe_allow_html=True)
 
 st.divider()
 
