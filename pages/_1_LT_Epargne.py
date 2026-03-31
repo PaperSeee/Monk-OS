@@ -8,7 +8,15 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from db.database import init_db, get_setting, set_setting, get_latest_finance, get_lt_capital, get_latest_portfolio_total_value
+from db.database import (
+    init_db,
+    get_setting,
+    set_setting,
+    get_latest_finance,
+    get_lt_capital,
+    get_latest_portfolio_total_value,
+    get_risk_crypto_current_value,
+)
 from utils.helpers import inject_css, fmt, get_fx_rates, CURRENCY_SYMBOLS, get_now_str, render_pillar_top_nav, render_modules_quick_menu
 
 st.set_page_config(
@@ -32,7 +40,7 @@ ccy_sym = CURRENCY_SYMBOLS.get(ccy, "€")
 latest_finance = get_latest_finance()
 cash_capital = get_lt_capital()
 inv_etf = get_latest_portfolio_total_value()
-inv_crypto = float(latest_finance.get("investments_crypto", 0) or 0) if latest_finance else 0.0
+inv_crypto = get_risk_crypto_current_value()
 inv_other = float(latest_finance.get("investments_other", 0) or 0) if latest_finance else 0.0
 capital = cash_capital + inv_etf + inv_crypto + inv_other
 
@@ -86,7 +94,7 @@ c2.metric("📈 ETF", fmt(inv_etf, ccy, rates))
 c3.metric("🔐 Crypto", fmt(inv_crypto, ccy, rates))
 c4.metric("🏠 Autres", fmt(inv_other, ccy, rates))
 
-st.info("Cette page LT est active de nouveau. Les données viennent de la dernière entrée Data Input.")
+st.info("Cette page LT agrège les données live : cash LT, ETF (Equity Engine), crypto (CT Risque) et autres investissements.")
 
 st.markdown(f"""
 <div style="text-align:center; margin-top:1.2rem;">

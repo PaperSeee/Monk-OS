@@ -1,13 +1,14 @@
 """
 MONK-OS V2 — Local SQLite Database Layer
-All data stays on-device: ~/monk_os_data.db
+All data stays on-device: <project_root>/monk_os_data.db
 """
 
 import sqlite3
 from pathlib import Path
 from datetime import datetime, date
 
-DB_PATH = Path.home() / "monk_os_data.db"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DB_PATH = PROJECT_ROOT / "monk_os_data.db"
 
 
 def get_connection():
@@ -124,6 +125,57 @@ def init_db():
             note           TEXT DEFAULT ''
         )
     """)
+
+    # CT — Payout transfers back to LT capital
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS ct_payouts (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at   TEXT NOT NULL,
+            source_type  TEXT DEFAULT 'Business',
+            source_name  TEXT DEFAULT '',
+            amount       REAL DEFAULT 0,
+            note         TEXT DEFAULT ''
+        )
+    """)
+
+    # LT — Tax pocket entries
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS tax_pocket_entries (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at  TEXT NOT NULL,
+            amount      REAL DEFAULT 0,
+            link_type   TEXT DEFAULT 'Impôt',
+            source      TEXT DEFAULT '',
+            urgency_level TEXT DEFAULT '',
+            status      TEXT DEFAULT 'En attente',
+            paid_at     TEXT DEFAULT '',
+            note        TEXT DEFAULT ''
+        )
+    """)
+
+    # Migrate tax_pocket_entries: add source column if missing
+    try:
+        c.execute("ALTER TABLE tax_pocket_entries ADD COLUMN source TEXT DEFAULT ''")
+    except Exception:
+        pass
+
+    # Migrate tax_pocket_entries: add urgency_level column if missing
+    try:
+        c.execute("ALTER TABLE tax_pocket_entries ADD COLUMN urgency_level TEXT DEFAULT ''")
+    except Exception:
+        pass
+
+    # Migrate tax_pocket_entries: add status column if missing
+    try:
+        c.execute("ALTER TABLE tax_pocket_entries ADD COLUMN status TEXT DEFAULT 'En attente'")
+    except Exception:
+        pass
+
+    # Migrate tax_pocket_entries: add paid_at column if missing
+    try:
+        c.execute("ALTER TABLE tax_pocket_entries ADD COLUMN paid_at TEXT DEFAULT ''")
+    except Exception:
+        pass
 
     # Migrate old finances table if month_key column missing
     try:
@@ -523,7 +575,8 @@ def delete_business_test(test_id: int):
 
 # ── RISK INVESTMENTS ─────────────────────────────────────────────────────────
 
-def create_risk_investment(name: str, asset_type: str, quantity: float, entry_price: float, note: str = ""):
+def create_risk_investment(name: str, asset_type: str, quantity: float, entry_price: float,
+                           note: str = "", deduct_from_lt: bool = False):
     """Create a new risky investment (crypto, speculative stock, etc.)"""
     conn = get_connection()
     conn.execute(
@@ -535,6 +588,10 @@ def create_risk_investment(name: str, asset_type: str, quantity: float, entry_pr
     )
     conn.commit()
     conn.close()
+    if deduct_from_lt:
+        invested_amount = float(quantity) * float(entry_price)
+        if invested_amount > 0:
+            adjust_lt_capital(-invested_amount)
 
 
 def update_risk_investment_price(investment_id: int, current_price: float):
@@ -597,3 +654,126 @@ def get_risk_investment_totals():
         'gain_loss': total_current - total_invested,
         'gain_loss_pct': ((total_current - total_invested) / total_invested * 100) if total_invested > 0 else 0
     }
+
+
+def get_risk_crypto_current_value() -> float:
+    """Get current total value for risk investments tagged as crypto."""
+    conn = get_connection()
+    rows = conn.execute("SELECT asset_type, quantity, current_price FROM risk_investments").fetchall()
+    conn.close()
+
+    total_crypto = 0.0
+    for r in rows:
+        asset_type = str(r["asset_type"] or "").strip().lower()
+        if "crypto" in asset_type:
+            total_crypto += float(r["quantity"] or 0) * float(r["current_price"] or 0)
+    return float(total_crypto)
+
+
+# ── CT PAYOUTS ──────────────────────────────────────────────────────────────
+
+def create_ct_payout(source_type: str, source_name: str, amount: float, note: str = ""):
+    amount = float(amount or 0)
+    if amount <= 0:
+        return
+
+    conn = get_connection()
+    conn.execute(
+        """
+        INSERT INTO ct_payouts (created_at, source_type, source_name, amount, note)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (datetime.now().isoformat(), str(source_type or ""), str(source_name or ""), amount, str(note or "")),
+    )
+    conn.commit()
+    conn.close()
+    adjust_lt_capital(amount)
+
+
+def get_ct_payouts(limit: int = 100):
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM ct_payouts ORDER BY created_at DESC LIMIT ?",
+        (int(limit),),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_ct_payout_total() -> float:
+    conn = get_connection()
+    row = conn.execute("SELECT SUM(amount) AS total FROM ct_payouts").fetchone()
+    conn.close()
+    return float((row["total"] if row else 0) or 0)
+
+
+# ── TAX POCKET (LT) ─────────────────────────────────────────────────────────
+
+def create_tax_pocket_entry(
+    amount: float,
+    link_type: str,
+    note: str = "",
+    source: str = "",
+    urgency_level: str = "",
+):
+    amount = float(amount or 0)
+    if amount <= 0:
+        return
+
+    link_type = str(link_type or "Impôt")
+    source = str(source or "")
+    urgency_level = str(urgency_level or "")
+    note = str(note or "")
+
+    conn = get_connection()
+    conn.execute(
+        """
+        INSERT INTO tax_pocket_entries (created_at, amount, link_type, source, urgency_level, status, paid_at, note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (datetime.now().isoformat(), amount, link_type, source, urgency_level, "En attente", "", note)
+    )
+    conn.commit()
+    conn.close()
+    adjust_lt_capital(-amount)
+
+
+def get_tax_pocket_entries(limit: int = 100):
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM tax_pocket_entries ORDER BY created_at DESC LIMIT ?",
+        (int(limit),),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def delete_tax_pocket_entry(entry_id: int) -> float:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT amount FROM tax_pocket_entries WHERE id = ?",
+        (int(entry_id),),
+    ).fetchone()
+
+    if not row:
+        conn.close()
+        return 0.0
+
+    amount = float(row["amount"] or 0)
+    conn.execute("DELETE FROM tax_pocket_entries WHERE id = ?", (int(entry_id),))
+    conn.commit()
+    conn.close()
+
+    if amount > 0:
+        adjust_lt_capital(amount)
+    return amount
+
+
+def mark_tax_pocket_entry_paid(entry_id: int):
+    conn = get_connection()
+    conn.execute(
+        "UPDATE tax_pocket_entries SET status = ?, paid_at = ? WHERE id = ?",
+        ("Payé", datetime.now().isoformat(), int(entry_id)),
+    )
+    conn.commit()
+    conn.close()

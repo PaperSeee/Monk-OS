@@ -17,6 +17,7 @@ from db.database import (
     set_setting,
     get_lt_capital,
     get_latest_portfolio_total_value,
+    get_risk_crypto_current_value,
     get_prop_challenges,
     get_business_tests,
     get_total_payouts,
@@ -157,7 +158,7 @@ st.markdown("<div style='margin:1rem 0; width:60px; height:3px; background:#3B82
 # ── LOAD AGGREGATED DATA FROM ALL 3 PILLARS ───────────────────────────────
 lt_cash_capital = get_lt_capital()
 etf_portfolio_value = get_latest_portfolio_total_value()
-lt_capital = lt_cash_capital + etf_portfolio_value
+live_crypto_value = get_risk_crypto_current_value()
 challenges = get_prop_challenges()
 tests = get_business_tests()
 risk_totals = get_risk_investment_totals()
@@ -173,9 +174,10 @@ funded_live = sum(
 )
 
 inv_bourse = etf_portfolio_value
-inv_crypto = float(get_setting("lt_invest_crypto", "0"))
+inv_crypto = live_crypto_value
 inv_immo = float(get_setting("lt_invest_immo", "0"))
 total_invest = inv_bourse + inv_crypto + inv_immo
+lt_capital = lt_cash_capital + total_invest
 
 # ── CENTRAL KPI GRID ────────────────────────────────────────────────────────
 st.markdown("""
@@ -218,7 +220,7 @@ with nav_cols[0]:
             </div>
             <hr style="border-color:#232836; margin:0.5rem 0;">
             <div style="font-size:0.65rem; color:#8892AA;">
-                ETF: {fmt(total_invest, ccy, r)}
+                Invest.: {fmt(total_invest, ccy, r)}
             </div>
         </div>
     </div>

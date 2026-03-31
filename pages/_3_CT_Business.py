@@ -23,6 +23,9 @@ from db.database import (
     update_business_test_status,
     add_business_cash_burn,
     delete_business_test,
+    create_ct_payout,
+    get_ct_payouts,
+    get_ct_payout_total,
 )
 from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, fmt, get_fx_rates, render_pillar_top_nav
 
@@ -108,6 +111,8 @@ st.markdown("<div style='margin:1rem 0; width:60px; height:3px; background:#8B5C
 investments = get_risk_investments()
 totals = get_risk_investment_totals()
 business_tests = get_business_tests()
+ct_payouts = get_ct_payouts(limit=50)
+ct_payout_total = get_ct_payout_total()
 
 total_allocated_budget = sum(float(t.get("allocated_budget", 0) or 0) for t in business_tests)
 total_cash_burn = sum(float(t.get("cash_burn", 0) or 0) for t in business_tests)
@@ -125,6 +130,57 @@ kpi_bot_1, kpi_bot_2, kpi_bot_3 = st.columns(3)
 kpi_bot_1.metric("Performance %", f"{totals['gain_loss_pct']:.2f}%")
 kpi_bot_2.metric("Budget Business", fmt(total_allocated_budget, ccy, r))
 kpi_bot_3.metric("Burn Business", fmt(total_cash_burn, ccy, r), delta=f"{active_business} actifs")
+st.caption(f"Payouts transférés vers LT: {fmt(ct_payout_total, ccy, r)}")
+
+st.divider()
+
+pay_col_form, pay_col_hist = st.columns([1.2, 1])
+
+with pay_col_form:
+    st.markdown("### 💸 Payout vers Capital LT")
+    with st.form("ct_payout_form"):
+        payout_amount = st.number_input("Montant payout", min_value=0.0, step=10.0, value=0.0)
+        payout_source_type = st.selectbox("Source", ["Business", "Investissement à risque"], index=0)
+
+        payout_source_name = ""
+        if payout_source_type == "Business":
+            business_names = [str(t.get("name") or "Business") for t in business_tests]
+            if business_names:
+                payout_source_name = st.selectbox("Business", business_names, index=0)
+            else:
+                payout_source_name = st.text_input("Business", placeholder="Ex: E-commerce fitness")
+        else:
+            investment_names = [str(inv.get("name") or "Actif") for inv in investments]
+            if investment_names:
+                payout_source_name = st.selectbox("Actif", investment_names, index=0)
+            else:
+                payout_source_name = st.text_input("Actif", placeholder="Ex: BTC")
+
+        payout_note = st.text_input("Note", placeholder="Ex: Retrait partiel de profit")
+
+        if st.form_submit_button("➕ Envoyer vers LT"):
+            if payout_amount > 0:
+                create_ct_payout(payout_source_type, payout_source_name, float(payout_amount), payout_note)
+                st.success(f"✓ {fmt(payout_amount, ccy, r)} crédités au capital LT")
+                st.rerun()
+            else:
+                st.error("Le montant doit être supérieur à 0")
+
+with pay_col_hist:
+    st.markdown("### 🧾 Historique Payouts")
+    if ct_payouts:
+        for p in ct_payouts[:8]:
+            st.markdown(
+                f"<div class='monk-card' style='padding:0.75rem; margin-bottom:0.5rem;'>"
+                f"<div style='font-size:0.7rem; color:#8892AA;'>{p.get('created_at', '')[:10]} · {p.get('source_type', '')}</div>"
+                f"<div style='font-size:0.85rem; color:#F0F4FF; font-weight:700; margin-top:0.25rem;'>{p.get('source_name', '—')}</div>"
+                f"<div style='font-size:0.8rem; color:#10B981; font-family:\'JetBrains Mono\',monospace; margin-top:0.2rem;'>+ {fmt(float(p.get('amount', 0) or 0), ccy, r)}</div>"
+                f"<div style='font-size:0.7rem; color:#4A5568; margin-top:0.2rem;'>{p.get('note', '') or '—'}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+    else:
+        st.caption("Aucun payout enregistré.")
 
 st.divider()
 
@@ -139,10 +195,18 @@ with col_risk:
         quantity = st.number_input("Quantité", min_value=0.0, step=0.01, value=0.0)
         entry_price = st.number_input("Prix d'entrée", min_value=0.0, step=0.01, value=0.0)
         note = st.text_input("Note (optionnel)", placeholder="Raison de l'investissement")
+        deduct_risk_lt = st.checkbox("Déduire du capital LT", value=False, help="Soustrait montant investi du cash LT")
 
         if st.form_submit_button("✓ Ajouter investissement"):
             if inv_name and quantity > 0 and entry_price > 0:
-                create_risk_investment(inv_name, asset_type, quantity, entry_price, note)
+                create_risk_investment(
+                    inv_name,
+                    asset_type,
+                    quantity,
+                    entry_price,
+                    note,
+                    deduct_from_lt=deduct_risk_lt,
+                )
                 st.success(f"✓ {inv_name} ajouté!")
                 st.rerun()
             else:

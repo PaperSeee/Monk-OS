@@ -101,8 +101,10 @@ if "etf_rows" not in st.session_state:
         ]
     else:
         st.session_state.etf_rows = [
-            {"ticker": "VWCE.DE", "shares": 0.0, "target_pct": 80.0},
-            {"ticker": "SXRV.DE", "shares": 0.0, "target_pct": 20.0},
+            {"ticker": "SXR8.DE", "shares": 0.0, "target_pct": 55.0},
+            {"ticker": "IUSN.DE", "shares": 0.0, "target_pct": 20.0},
+            {"ticker": "IS3N.DE", "shares": 0.0, "target_pct": 15.0},
+            {"ticker": "EXSC.DE", "shares": 0.0, "target_pct": 10.0},
         ]
 
 # ── ETF SELECTOR ─────────────────────────────────────────────────────────────

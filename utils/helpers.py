@@ -13,11 +13,14 @@ import pytz
 # ══════════════════════════════════════════════════════════
 
 ETF_CATALOG = {
+    "SXR8.DE":  "iShares Core S&P 500 USD (ACC)",
+    "IUSN.DE":  "iShares MSCI World Small Cap USD (ACC)",
+    "IS3N.DE":  "iShares Core MSCI EM IMI USD (ACC)",
+    "EXSC.DE":  "iShares Core STOXX Europe 600 EUR (ACC)",
     "VWCE.DE":  "Vanguard All-World (ACC)",
     "SXRV.DE":  "iShares Nasdaq 100 (ACC)",
     "MEUD.PA":  "Amundi MSCI Europe (ACC)",
     "EIMI.PA":  "iShares EM IMI (ACC)",
-    "IUSN.DE":  "iShares MSCI World Small Cap",
     "IWDA.AS":  "iShares Core MSCI World (ACC)",
     "CSPX.L":   "iShares S&P 500 (ACC)",
     "EXSA.DE":  "iShares EURO STOXX 50 (DIS)",
@@ -29,11 +32,14 @@ ETF_CATALOG = {
 
 # Estimated annual dividend/yield % (for accumulating ETFs: theoretical reinvested)
 ETF_YIELD = {
+    "SXR8.DE": 1.3,
+    "IUSN.DE": 1.5,
+    "IS3N.DE": 2.2,
+    "EXSC.DE": 2.8,
     "VWCE.DE": 1.8,
     "SXRV.DE": 0.5,
     "MEUD.PA": 2.5,
     "EIMI.PA": 2.2,
-    "IUSN.DE": 1.5,
     "IWDA.AS": 1.6,
     "CSPX.L":  1.3,
     "EXSA.DE": 3.2,
@@ -203,6 +209,7 @@ def render_modules_quick_menu(key_suffix: str = "default"):
         "🛡️ Sentinel": "pages/4_🛡️_Sentinel.py",
         "📊 Data Input": "pages/5_📊_Data_Input.py",
         "📄 CEO Report": "pages/6_📄_CEO_Report.py",
+        "🧾 Impôt ou Urgence": "pages/7_🧾_Poche_Impot.py",
     }
 
     st.markdown("""
@@ -220,7 +227,11 @@ def render_modules_quick_menu(key_suffix: str = "default"):
         label_visibility="collapsed",
     )
 
-    if st.button("Ouvrir module", key=f"modules_quick_open_{key_suffix}", use_container_width=True):
+    last_key = f"modules_quick_last_{key_suffix}"
+    if last_key not in st.session_state:
+        st.session_state[last_key] = selected_module
+    elif selected_module != st.session_state[last_key]:
+        st.session_state[last_key] = selected_module
         st.switch_page(module_items[selected_module])
 
 
