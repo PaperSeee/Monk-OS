@@ -401,9 +401,8 @@ def get_latest_portfolio():
 
 
 def get_latest_portfolio_total_value() -> float:
-    """Returns total EUR value of latest ETF portfolio snapshot."""
-    rows = get_latest_portfolio_v2()
-    return float(sum(float(r.get("shares", 0) or 0) * float(r.get("price", 0) or 0) for r in rows))
+    """Returns total EUR value of all logged monthly ETF investments."""
+    return get_total_invested_all_time()
 
 
 # ── MONTHLY INVESTMENTS ──────────────────────────────────────────────────────
