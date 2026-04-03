@@ -9,7 +9,19 @@ from pathlib import Path
 from datetime import date
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from db.database import init_db, get_setting, set_setting, get_latest_portfolio_v2, get_finances, get_lt_capital
+from db.database import (
+    init_db,
+    get_setting,
+    set_setting,
+    get_latest_portfolio_v2,
+    get_finances,
+    get_lt_capital,
+    set_lt_capital,
+    get_fortress_savings_for_month,
+    get_fortress_savings_history,
+    upsert_fortress_saving,
+    delete_fortress_saving,
+)
 from utils.helpers import inject_css, section_head, sub_label, fmt, get_fx_rates, get_now_str, TIMEZONES, render_long_term_sidebar_nav
 
 st.set_page_config(
@@ -215,6 +227,73 @@ if finances:
     disp.columns = ["Mois","Revenu","Loyer","Nourriture","Transport","Divers","Épargne Nette"][:len(disp.columns)]
     st.dataframe(disp, use_container_width=True, hide_index=True)
 
+# ── Fortress Monthly Savings Input & History ────────────────────────────────
+st.divider()
+sub_label("Fortress One — Épargne mensuelle")
+
+month_col, amount_col, action_col = st.columns([1.2, 1.2, 1])
+selected_month = month_col.date_input(
+    "Mois concerné",
+    value=date.today().replace(day=1),
+    format="YYYY-MM-DD",
+)
+selected_month_key = selected_month.strftime("%Y-%m")
+existing_month = get_fortress_savings_for_month(selected_month_key)
+
+with st.form("fortress_monthly_savings_form", clear_on_submit=False):
+    monthly_amount = amount_col.number_input(
+        "Montant épargné ce mois (€)",
+        min_value=0.0,
+        value=float(existing_month["amount"]) if existing_month else 0.0,
+        step=10.0,
+    )
+    monthly_note = st.text_input(
+        "Note",
+        value=existing_month["note"] if existing_month else "",
+        placeholder="Ex: Avril 2026 — effort supplémentaire",
+    )
+    save_btn = action_col.form_submit_button(
+        "💾 Enregistrer",
+        use_container_width=True,
+    )
+
+if save_btn:
+    new_capital = upsert_fortress_saving(selected_month_key, monthly_amount, monthly_note)
+    st.success(
+        f"✓ Épargne du mois {selected_month_key} enregistrée. Capital LT: {fmt(new_capital, ccy, rates)}"
+    )
+    st.rerun()
+
+if existing_month:
+    del_col1, del_col2 = st.columns([1.5, 3])
+    with del_col1:
+        if st.button("🗑 Supprimer ce mois", type="secondary", use_container_width=True):
+            new_capital = delete_fortress_saving(selected_month_key)
+            st.success(
+                f"✓ Entrée {selected_month_key} supprimée. Capital LT: {fmt(new_capital, ccy, rates)}"
+            )
+            st.rerun()
+
+history = get_fortress_savings_history()
+if history:
+    import pandas as pd
+
+    h1, h2 = st.columns(2)
+    total_saved = sum(float(row.get("amount", 0) or 0) for row in history)
+    h1.metric("Total épargné (historique Fortress)", fmt(total_saved, ccy, rates))
+    h2.metric("Nombre de mois saisis", str(len(history)))
+
+    hdf = pd.DataFrame(history)
+    hdf = hdf.sort_values("month_key", ascending=False)
+    disp_hist = hdf[["month_key", "amount", "note"]].copy()
+    if ccy != "EUR":
+        r = rates.get(ccy, 1.0)
+        disp_hist["amount"] = (disp_hist["amount"] * r).map(lambda x: f"{x:,.2f}")
+    disp_hist.columns = ["Mois", "Épargne", "Note"]
+    st.dataframe(disp_hist, use_container_width=True, hide_index=True)
+else:
+    st.info("Aucune épargne mensuelle saisie dans Fortress One pour le moment.")
+
 # ── Settings ─────────────────────────────────────────────────────────────────
 st.divider()
 with st.expander("⚙  Paramètres Fortress", expanded=False):
@@ -233,6 +312,6 @@ with st.expander("⚙  Paramètres Fortress", expanded=False):
     if st.button("💾  Sauvegarder"):
         set_setting("savings_goal", new_goal)
         set_setting("monk_mode_end_date", new_end.isoformat())
-        set_setting("current_savings", manual_sav)
+        set_lt_capital(manual_sav)
         st.success("✓ Paramètres sauvegardés.")
         st.rerun()

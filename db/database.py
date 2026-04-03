@@ -167,6 +167,17 @@ def init_db():
         )
     """)
 
+    # Fortress One — monthly manual savings history
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS fortress_savings (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            month_key   TEXT NOT NULL UNIQUE,
+            amount      REAL DEFAULT 0,
+            note        TEXT DEFAULT '',
+            created_at  TEXT NOT NULL
+        )
+    """)
+
     # Migrate monthly_investments: add buy_price/parts if missing
     for col in ["buy_price REAL DEFAULT 0", "parts REAL DEFAULT 0"]:
         try:
@@ -360,6 +371,75 @@ def get_latest_finance():
     row  = conn.execute("SELECT * FROM finances ORDER BY month_key DESC LIMIT 1").fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+# ── FORTRESS MONTHLY SAVINGS ───────────────────────────────────────────────
+
+def get_fortress_savings_for_month(month_key: str):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM fortress_savings WHERE month_key=?",
+        (month_key,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_fortress_savings_history() -> list[dict]:
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM fortress_savings ORDER BY month_key DESC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def upsert_fortress_saving(month_key: str, amount: float, note: str = "") -> float:
+    """Insert/update one monthly saving entry and sync LT capital with delta."""
+    amount = float(amount or 0)
+    conn = get_connection()
+    existing = conn.execute(
+        "SELECT amount FROM fortress_savings WHERE month_key=?",
+        (month_key,)
+    ).fetchone()
+    previous_amount = float(existing["amount"]) if existing else 0.0
+    now = datetime.now().isoformat(timespec="seconds")
+
+    if existing:
+        conn.execute(
+            "UPDATE fortress_savings SET amount=?, note=? WHERE month_key=?",
+            (amount, note, month_key),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO fortress_savings (month_key, amount, note, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (month_key, amount, note, now),
+        )
+
+    conn.commit()
+    conn.close()
+
+    delta = amount - previous_amount
+    return adjust_lt_capital(delta)
+
+
+def delete_fortress_saving(month_key: str) -> float:
+    """Delete one monthly saving entry and remove its amount from LT capital."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT amount FROM fortress_savings WHERE month_key=?",
+        (month_key,),
+    ).fetchone()
+    if row:
+        conn.execute("DELETE FROM fortress_savings WHERE month_key=?", (month_key,))
+    conn.commit()
+    conn.close()
+
+    removed = float(row["amount"]) if row else 0.0
+    return adjust_lt_capital(-removed)
 
 
 # ── PORTFOLIO V2 ──────────────────────────────────────────────────────────────
