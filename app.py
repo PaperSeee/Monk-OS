@@ -16,6 +16,7 @@ from db.database import (
     init_db,
     get_setting,
     set_setting,
+    get_finances,
     get_lt_capital,
     get_live_portfolio_value,
     get_total_invested_all_time,
