@@ -38,6 +38,106 @@ ccy     = st.session_state.get("currency", "EUR")
 tz_name = st.session_state.get("timezone", "Europe/Brussels")
 rates   = get_fx_rates() if ccy != "EUR" else {"EUR": 1.0}
 
+st.markdown(
+    """
+    <style>
+    .fortress-kicker {
+        font-size: 0.62rem;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: #5DA8FF;
+        font-weight: 700;
+        margin: 0.1rem 0 0.55rem 0;
+    }
+    .fortress-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin: 0.15rem 0 1rem 0;
+    }
+    .fortress-strip-card {
+        background: linear-gradient(145deg, rgba(29, 39, 61, 0.95), rgba(19, 26, 42, 0.95));
+        border: 1px solid #2A3A59;
+        border-radius: 12px;
+        padding: 0.85rem 0.95rem;
+        box-shadow: inset 0 1px 0 rgba(93,168,255,0.08), 0 8px 24px rgba(8, 12, 20, 0.32);
+    }
+    .fortress-strip-label {
+        font-size: 0.58rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #7C8BA7;
+        margin-bottom: 0.45rem;
+    }
+    .fortress-strip-value {
+        font-size: 1rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #EEF5FF;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .fortress-hero-card {
+        background:
+            radial-gradient(circle at 90% 8%, rgba(79, 144, 255, 0.22) 0%, rgba(79, 144, 255, 0.02) 44%, transparent 66%),
+            linear-gradient(145deg, rgba(28, 35, 51, 0.95), rgba(17, 23, 36, 0.95));
+        border-color: #2E436A !important;
+        box-shadow: 0 12px 30px rgba(9, 15, 26, 0.32);
+    }
+    .fortress-status-card {
+        background:
+            radial-gradient(circle at 10% 8%, rgba(52, 211, 153, 0.16) 0%, rgba(52, 211, 153, 0.02) 42%, transparent 65%),
+            linear-gradient(145deg, rgba(28, 35, 51, 0.96), rgba(17, 23, 36, 0.96));
+        box-shadow: 0 10px 28px rgba(8, 12, 20, 0.34);
+    }
+    .fortress-section-note {
+        margin-top: -0.3rem;
+        margin-bottom: 0.65rem;
+        color: #6E7D9B;
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+    .fortress-glow-divider {
+        width: 92px;
+        height: 3px;
+        border-radius: 3px;
+        background: linear-gradient(90deg, rgba(93,168,255,0.0), rgba(93,168,255,0.95), rgba(93,168,255,0.0));
+        margin: 0.55rem 0 0.95rem 0;
+    }
+    .fortress-focus {
+        border: 1px solid #2A3A59;
+        border-radius: 12px;
+        background: linear-gradient(145deg, rgba(26, 33, 49, 0.92), rgba(17, 24, 38, 0.92));
+        padding: 0.7rem 0.9rem;
+        margin: 0.2rem 0 1rem 0;
+    }
+    .fortress-focus-title {
+        font-size: 0.62rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #8FA3C6;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+    }
+    .fortress-focus-desc {
+        font-size: 0.8rem;
+        color: #A5B2CB;
+        line-height: 1.45;
+    }
+    @media (max-width: 1080px) {
+        .fortress-strip {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 640px) {
+        .fortress-strip {
+            grid-template-columns: 1fr;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ── Data ─────────────────────────────────────────────────────────────────────
 current_savings = get_lt_capital()
 savings_goal    = float(get_setting("savings_goal", "2000"))
@@ -45,11 +145,14 @@ monk_end_raw    = get_setting("monk_mode_end_date", "2026-04-09")
 portfolio_rows  = get_latest_portfolio_v2()
 portfolio_value = sum(r["shares"] * r["price"] for r in portfolio_rows)
 net_worth       = current_savings + portfolio_value
+goal_remaining  = max(savings_goal - current_savings, 0)
+goal_ratio      = (current_savings / savings_goal * 100) if savings_goal > 0 else 0
 
 # ── Header ────────────────────────────────────────────────────────────────────
 col_head, col_clock = st.columns([3, 1])
 with col_head:
     section_head("MODULE 01 — FORTRESS ONE")
+    st.markdown('<div class="fortress-kicker">Fintech Wealth Command Center</div>', unsafe_allow_html=True)
 with col_clock:
     date_str, time_str = get_now_str(tz_name)
     tz_label = [k for k, v in TIMEZONES.items() if v == tz_name]
@@ -62,12 +165,36 @@ with col_clock:
     </div>
     """, unsafe_allow_html=True)
 
+st.markdown(
+    f"""
+    <div class="fortress-strip">
+        <div class="fortress-strip-card">
+            <div class="fortress-strip-label">Net Worth</div>
+            <div class="fortress-strip-value">{fmt(net_worth, ccy, rates)}</div>
+        </div>
+        <div class="fortress-strip-card">
+            <div class="fortress-strip-label">Objectif Fortress</div>
+            <div class="fortress-strip-value">{fmt(savings_goal, ccy, rates)}</div>
+        </div>
+        <div class="fortress-strip-card">
+            <div class="fortress-strip-label">Restant</div>
+            <div class="fortress-strip-value">{fmt(goal_remaining, ccy, rates)}</div>
+        </div>
+        <div class="fortress-strip-card">
+            <div class="fortress-strip-label">Progression</div>
+            <div class="fortress-strip-value">{goal_ratio:.1f}%</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ── NET WORTH HERO ────────────────────────────────────────────────────────────
 col_nw, col_status = st.columns([2, 1.2])
 
 with col_nw:
     st.markdown(f"""
-    <div class="monk-card">
+    <div class="monk-card fortress-hero-card">
         <div class="net-worth-label">▸ PATRIMOINE NET</div>
         <div class="net-worth-hero">{fmt(net_worth, ccy, rates)}</div>
         <div class="net-worth-sub">
@@ -103,7 +230,7 @@ with col_status:
     )
 
     st.markdown(f"""
-    <div class="monk-card" style="text-align:center; border-color:{border_color};">
+    <div class="monk-card fortress-status-card" style="text-align:center; border-color:{border_color};">
         <div style="font-size:0.58rem; color:#4A5568; letter-spacing:0.2em;
                     text-transform:uppercase; margin-bottom:0.8rem; font-weight:500;">
             Statut Fortress
@@ -119,6 +246,7 @@ with col_status:
 # ── SAVINGS PROGRESS ─────────────────────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
 sub_label(f"Progression objectif épargne — {fmt(savings_goal, ccy, rates)}")
+st.markdown('<div class="fortress-glow-divider"></div>', unsafe_allow_html=True)
 
 progress_val = min(current_savings / savings_goal, 1.0) if savings_goal > 0 else 0
 st.progress(progress_val)
@@ -132,6 +260,7 @@ st.divider()
 
 # ── MONK MODE COUNTDOWN ───────────────────────────────────────────────────────
 sub_label("Monk Mode — Compte à rebours")
+st.markdown('<div class="fortress-section-note">Rythme d\'exécution et discipline temporelle de ton plan d\'accumulation.</div>', unsafe_allow_html=True)
 
 try:
     monk_end    = date.fromisoformat(monk_end_raw)
@@ -188,6 +317,7 @@ c4.markdown(f"""
 if portfolio_rows and any(r["shares"] > 0 for r in portfolio_rows):
     st.divider()
     sub_label("Détail du portefeuille ETF")
+    st.markdown('<div class="fortress-section-note">Vue consolidée de tes positions, pondérations et valorisation instantanée.</div>', unsafe_allow_html=True)
     rows_html = ""
     for r in portfolio_rows:
         if r["shares"] > 0:
@@ -215,6 +345,7 @@ if finances:
     import pandas as pd
     st.divider()
     sub_label("Historique financier")
+    st.markdown('<div class="fortress-section-note">Lecture chronologique des flux mensuels pour piloter les arbitrages cash/investissement.</div>', unsafe_allow_html=True)
     df = pd.DataFrame(finances).sort_values("month_key")
     show_cols = ["month_key","income","rent","food","transport","misc","savings"]
     show_cols = [c for c in show_cols if c in df.columns]
@@ -230,8 +361,20 @@ if finances:
 # ── Fortress Monthly Savings Input & History ────────────────────────────────
 st.divider()
 sub_label("Fortress One — Épargne mensuelle")
+st.markdown(
+    """
+    <div class="fortress-focus">
+        <div class="fortress-focus-title">Journal de capitalisation</div>
+        <div class="fortress-focus-desc">
+            Saisis ton effort d'épargne mensuel pour alimenter le capital LT automatiquement.
+            Chaque modification met à jour le dashboard central en temps réel.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-month_col, amount_col, action_col = st.columns([1.2, 1.2, 1])
+month_col = st.columns([1.2, 1.2, 1])[0]
 selected_month = month_col.date_input(
     "Mois concerné",
     value=date.today().replace(day=1),
@@ -241,21 +384,24 @@ selected_month_key = selected_month.strftime("%Y-%m")
 existing_month = get_fortress_savings_for_month(selected_month_key)
 
 with st.form("fortress_monthly_savings_form", clear_on_submit=False):
+    amount_col, note_col, action_col = st.columns([1.2, 1.8, 1])
     monthly_amount = amount_col.number_input(
         "Montant épargné ce mois (€)",
         min_value=0.0,
         value=float(existing_month["amount"]) if existing_month else 0.0,
         step=10.0,
     )
-    monthly_note = st.text_input(
+    monthly_note = note_col.text_input(
         "Note",
         value=existing_month["note"] if existing_month else "",
         placeholder="Ex: Avril 2026 — effort supplémentaire",
     )
-    save_btn = action_col.form_submit_button(
+    with action_col:
+        st.markdown("<div style='height:1.7rem;'></div>", unsafe_allow_html=True)
+        save_btn = st.form_submit_button(
         "💾 Enregistrer",
         use_container_width=True,
-    )
+        )
 
 if save_btn:
     new_capital = upsert_fortress_saving(selected_month_key, monthly_amount, monthly_note)
