@@ -13,6 +13,7 @@ from db.database import (
     init_db, get_latest_portfolio_v2, save_portfolio_v2, get_setting,
     save_monthly_investment, get_monthly_investments, get_monthly_investment_totals,
     get_total_invested_all_time, delete_monthly_investment,
+    get_finances, get_fortress_savings_history, get_risk_investment_totals,
 )
 from utils.helpers import (
     inject_css, section_head, sub_label, plotly_theme,
@@ -32,6 +33,7 @@ render_long_term_sidebar_nav("equity")
 import yfinance as yf
 import plotly.graph_objects as go
 import pandas as pd
+import numpy as np
 
 section_head("MODULE 02 — EQUITY ENGINE V2")
 
@@ -462,6 +464,211 @@ if monthly_invest > 0:
                 '</div>',
                 unsafe_allow_html=True,
             )
+
+st.markdown("<br>", unsafe_allow_html=True)
+sub_label("Scénarios probabilistes calibrés (historique Equity)")
+st.markdown(
+    """
+    <div style="font-size:0.78rem;color:#6E7D9B;margin-top:-0.3rem;margin-bottom:0.7rem;line-height:1.5;">
+        Modèle basé sur ton historique réel (finances + investissements + valorisation live),
+        avec profils de risque et probabilité d'atteinte des scénarios.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+profile_col, scen_col, horizon_col = st.columns([1.1, 2.2, 1])
+profile_name = profile_col.selectbox(
+    "Profil",
+    ["Conservateur", "Équilibré", "Agressif", "Personnalisé"],
+    index=1,
+    key="eq_scenario_profile",
+)
+
+profile_presets = {
+    "Conservateur": {"rates": [3.0, 5.0, 7.0, 9.0], "vol_mult": 0.82},
+    "Équilibré": {"rates": [5.0, 9.0, 11.0, 15.0], "vol_mult": 1.00},
+    "Agressif": {"rates": [8.0, 11.0, 15.0, 20.0], "vol_mult": 1.25},
+}
+
+if profile_name == "Personnalisé":
+    scenario_raw = scen_col.text_input(
+        "Scénarios annuels (%)",
+        value="5, 9, 11, 15",
+        help="Exemple: 5, 9, 11, 15",
+        key="eq_scenario_custom",
+    )
+    profile_vol_mult = 1.0
+else:
+    preset_rates = profile_presets[profile_name]["rates"]
+    scenario_raw = ", ".join(str(v).rstrip("0").rstrip(".") for v in preset_rates)
+    scen_col.text_input(
+        "Scénarios annuels (%)",
+        value=scenario_raw,
+        disabled=True,
+        key="eq_scenario_preset",
+    )
+    profile_vol_mult = profile_presets[profile_name]["vol_mult"]
+
+horizon_months = int(horizon_col.number_input("Horizon (mois)", min_value=6, max_value=240, value=36, step=6, key="eq_horizon_m"))
+
+parsed = []
+for chunk in scenario_raw.split(","):
+    val = chunk.strip().replace("%", "")
+    if not val:
+        continue
+    try:
+        parsed.append(float(val))
+    except Exception:
+        pass
+if len(parsed) < 2:
+    parsed = [5.0, 9.0, 11.0, 15.0]
+
+scenario_rates = sorted(set(max(-99.0, min(250.0, v)) for v in parsed))
+scenario_dec = [v / 100.0 for v in scenario_rates]
+
+finances = get_finances()
+fort_hist = get_fortress_savings_history()
+inv_hist = get_monthly_investment_totals()
+
+fin_df = pd.DataFrame(finances) if finances else pd.DataFrame(columns=["month_key", "savings"])
+fort_df = pd.DataFrame(fort_hist) if fort_hist else pd.DataFrame(columns=["month_key", "amount"])
+inv_df = pd.DataFrame(inv_hist) if inv_hist else pd.DataFrame(columns=["month_key", "total"])
+
+month_pool = set()
+if not fin_df.empty and "month_key" in fin_df.columns:
+    month_pool.update(fin_df["month_key"].dropna().tolist())
+if not fort_df.empty and "month_key" in fort_df.columns:
+    month_pool.update(fort_df["month_key"].dropna().tolist())
+if not inv_df.empty and "month_key" in inv_df.columns:
+    month_pool.update(inv_df["month_key"].dropna().tolist())
+
+timeline = []
+for mk in sorted(month_pool):
+    cash = 0.0
+    if not fin_df.empty:
+        m = fin_df[fin_df["month_key"] == mk]
+        if not m.empty and "savings" in m.columns:
+            cash = float(m.iloc[0]["savings"] or 0)
+    if cash == 0.0 and not fort_df.empty:
+        m = fort_df[fort_df["month_key"] == mk]
+        if not m.empty and "amount" in m.columns:
+            cash = float(m.iloc[0]["amount"] or 0)
+
+    invest = 0.0
+    if not inv_df.empty:
+        m = inv_df[inv_df["month_key"] == mk]
+        if not m.empty and "total" in m.columns:
+            invest = float(m.iloc[0]["total"] or 0)
+
+    timeline.append({"month_key": mk, "flow": cash + invest})
+
+flow_df = pd.DataFrame(timeline)
+monthly_flow_avg = float(flow_df["flow"].mean()) if not flow_df.empty else 0.0
+
+risk_totals = get_risk_investment_totals()
+invested_total = float(get_total_invested_all_time()) + float(risk_totals.get("total_invested", 0) or 0)
+
+portfolio_live_now = 0.0
+for row in st.session_state.etf_rows:
+    tk = row["ticker"]
+    sh = float(row.get("shares", 0) or 0)
+    pr = float(prices_cache.get(tk, 0) or 0)
+    portfolio_live_now += sh * pr
+
+current_invest_value = portfolio_live_now + float(risk_totals.get("total_current", 0) or 0)
+obs_months = max(len(inv_df), 6)
+
+if invested_total > 0 and current_invest_value > 0:
+    hist_annual = (current_invest_value / invested_total) ** (12 / obs_months) - 1
+else:
+    hist_annual = 0.06
+
+if not flow_df.empty and len(flow_df) >= 3:
+    abs_mean = max(float(np.mean(np.abs(flow_df["flow"].values))), 1.0)
+    flow_cv = float(np.std(flow_df["flow"].values) / abs_mean)
+else:
+    flow_cv = 0.55
+
+sigma_annual = min(max((0.09 + flow_cv * 0.18) * profile_vol_mult, 0.07), 0.55)
+
+weights = []
+for sr in scenario_dec:
+    z = (sr - hist_annual) / sigma_annual if sigma_annual > 0 else 0.0
+    weights.append(float(np.exp(-0.5 * z * z)))
+weights_sum = sum(weights) if weights else 1.0
+scenario_probs = [w / weights_sum for w in weights]
+
+base_wealth = float(current_savings) + float(portfolio_live_now) + float(risk_totals.get("total_current", 0) or 0)
+mu_month = hist_annual / 12.0
+sigma_month = sigma_annual / np.sqrt(12.0)
+rng = np.random.default_rng(42)
+sim_count = 1500
+rand = rng.normal(mu_month, sigma_month, size=(sim_count, horizon_months))
+terminal_values = np.full(sim_count, base_wealth, dtype=float)
+for m in range(horizon_months):
+    terminal_values = terminal_values * (1.0 + rand[:, m]) + monthly_flow_avg
+
+def deterministic_target(rate_annual: float, months: int, start: float, monthly_flow: float) -> float:
+    rm = (1 + rate_annual) ** (1 / 12) - 1
+    if abs(rm) < 1e-10:
+        return start + monthly_flow * months
+    return start * ((1 + rm) ** months) + monthly_flow * ((((1 + rm) ** months) - 1) / rm)
+
+target_values = [deterministic_target(sr, horizon_months, base_wealth, monthly_flow_avg) for sr in scenario_dec]
+reach_probs = [float(np.mean(terminal_values >= tgt)) for tgt in target_values]
+
+scenario_table = pd.DataFrame(
+    {
+        "Scénario": [f"{s:.1f}%" for s in scenario_rates],
+        "Probabilité historique": [f"{p * 100:.1f}%" for p in scenario_probs],
+        "Probabilité d'atteinte": [f"{p * 100:.1f}%" for p in reach_probs],
+        "Cible à horizon": [fmt(v, ccy, rates) for v in target_values],
+    }
+)
+st.dataframe(scenario_table, use_container_width=True, hide_index=True)
+
+fig_prob = go.Figure()
+fig_prob.add_trace(
+    go.Bar(
+        x=[f"{s:.1f}%" for s in scenario_rates],
+        y=[p * 100 for p in scenario_probs],
+        name="Probabilité historique",
+        marker_color="#3B82F6",
+        opacity=0.9,
+    )
+)
+fig_prob.add_trace(
+    go.Scatter(
+        x=[f"{s:.1f}%" for s in scenario_rates],
+        y=[p * 100 for p in reach_probs],
+        name="Probabilité d'atteinte",
+        mode="lines+markers",
+        line=dict(color="#22D484", width=3),
+        marker=dict(size=7),
+    )
+)
+fig_prob.update_layout(
+    **plotly_theme(),
+    height=330,
+    margin=dict(t=20, b=40, l=40, r=10),
+    hovermode="x unified",
+    yaxis_title="Probabilité (%)",
+    xaxis_title="Scénarios annuels",
+)
+st.plotly_chart(fig_prob, use_container_width=True)
+
+st.markdown(
+    f"""
+    <div style="font-size:0.74rem;color:#7C8DAA;margin-top:-0.3rem;margin-bottom:0.7rem;">
+        Profil actif : <strong>{profile_name}</strong> ·
+        Signal historique implicite : <strong>{hist_annual*100:.2f}%/an</strong> ·
+        Volatilité estimée : <strong>{sigma_annual*100:.2f}%/an</strong> ·
+        Flux mensuel moyen : <strong>{fmt(monthly_flow_avg, ccy, rates)}</strong>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.divider()
 
