@@ -248,7 +248,12 @@ st.markdown("<br>", unsafe_allow_html=True)
 sub_label(f"Progression objectif épargne — {fmt(savings_goal, ccy, rates)}")
 st.markdown('<div class="fortress-glow-divider"></div>', unsafe_allow_html=True)
 
-progress_val = min(current_savings / savings_goal, 1.0) if savings_goal > 0 else 0
+# Ensure progress value is always between 0.0 and 1.0
+try:
+    raw_progress = (current_savings / savings_goal) if savings_goal and float(savings_goal) != 0 else 0.0
+    progress_val = max(0.0, min(float(raw_progress), 1.0))
+except Exception:
+    progress_val = 0.0
 st.progress(progress_val)
 
 cpct, cact, crest = st.columns(3)

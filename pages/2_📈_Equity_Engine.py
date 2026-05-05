@@ -401,8 +401,10 @@ sub_label("Projection — Combien vaudra ton portefeuille ?")
 col_years, _ = st.columns([1, 2])
 with col_years:
     projection_years = st.slider("Horizon (années)", min_value=1, max_value=30, value=10, step=1)
+    include_dca = st.checkbox("Inclure investissements mensuels (DCA)", value=False, help="Si activé, les montants mensuels saisis seront ajoutés au portefeuille chaque mois")
 
-monthly_invest = total_eur
+# monthly_invest only applied when DCA is enabled — otherwise projections start from current value only
+monthly_invest = total_eur if include_dca else 0.0
 scenarios = {
     "Pessimiste (4%/an)": 0.04,
     "Modéré (7%/an)": 0.07,
@@ -410,15 +412,16 @@ scenarios = {
 }
 scenario_colors = {"Pessimiste (4%/an)": "#EF4444", "Modéré (7%/an)": "#F59E0B", "Optimiste (10%/an)": "#10B981"}
 
-if monthly_invest > 0:
-    # Use current portfolio value as initial principal (reflect real invested amount)
-    starting_value = 0.0
-    for r in st.session_state.etf_rows:
-        tk = r.get("ticker")
-        pr = prices_cache.get(tk, 0) or 0
-        shares = float(r.get("shares", 0) or 0)
-        starting_value += shares * pr
+# Compute starting capital from current holdings
+starting_value = 0.0
+for r in st.session_state.etf_rows:
+    tk = r.get("ticker")
+    pr = prices_cache.get(tk, 0) or 0
+    shares = float(r.get("shares", 0) or 0)
+    starting_value += shares * pr
 
+# Only render projection if there is a meaningful starting capital or monthly contributions
+if starting_value > 0 or monthly_invest > 0:
     fig3 = go.Figure()
     final_values = {}
     months = projection_years * 12
