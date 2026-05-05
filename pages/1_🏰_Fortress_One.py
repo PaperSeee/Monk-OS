@@ -432,11 +432,48 @@ if history:
     hdf = pd.DataFrame(history)
     hdf = hdf.sort_values("month_key", ascending=False)
     disp_hist = hdf[["month_key", "amount", "note"]].copy()
-    if ccy != "EUR":
-        r = rates.get(ccy, 1.0)
-        disp_hist["amount"] = (disp_hist["amount"] * r).map(lambda x: f"{x:,.2f}")
+    # Keep raw numeric values for editor; format only for display when needed
     disp_hist.columns = ["Mois", "Épargne", "Note"]
-    st.dataframe(disp_hist, use_container_width=True, hide_index=True)
+    try:
+        edited = st.data_editor(disp_hist, use_container_width=True, hide_index=True, num_rows="fixed", key="fortress_editor")
+    except Exception:
+        # Fallback to non-editable dataframe if st.data_editor not available
+        st.dataframe(disp_hist, use_container_width=True, hide_index=True)
+        edited = None
+
+    if edited is not None:
+        if st.button("💾 Appliquer modifications", key="fortress_apply_changes"):
+            # Build lookup of original months
+            orig_months = {row["month_key"]: row for row in history}
+            edited_rows = edited.to_dict(orient="records")
+            edited_months = set()
+
+            def parse_amount(v):
+                try:
+                    # handle strings with commas or currency symbols
+                    s = str(v)
+                    for ch in ["€", ",", "\u202f", " "]:
+                        s = s.replace(ch, "")
+                    return float(s) if s not in ("", "None", "nan") else 0.0
+                except Exception:
+                    return 0.0
+
+            for r in edited_rows:
+                mk = r.get("Mois")
+                if not mk:
+                    continue
+                amount = parse_amount(r.get("Épargne", 0))
+                note = r.get("Note", "") or ""
+                upsert_fortress_saving(mk, amount, note)
+                edited_months.add(mk)
+
+            # Delete months removed by the user
+            for orig in orig_months:
+                if orig not in edited_months:
+                    delete_fortress_saving(orig)
+
+            st.success("✓ Modifications appliquées.")
+            st.rerun()
 else:
     st.info("Aucune épargne mensuelle saisie dans Fortress One pour le moment.")
 

@@ -191,9 +191,14 @@ for i, row in enumerate(st.session_state.etf_rows):
             )
 
         with col_parts:
+            # Editable current parts/shares held (reflects real holdings)
+            current_shares = st.number_input(
+                "Parts détenues", min_value=0.0, value=float(row.get("shares", 0.0)), step=0.0001, format="%.4f", key=f"shares_{i}", label_visibility="collapsed"
+            )
+            st.session_state.etf_rows[i]["shares"] = float(current_shares)
+            # Show calculated parts to buy for this month
             st.markdown(
-                f'<div style="padding-top:0.9rem;font-size:0.85rem;font-weight:600;'
-                f'color:#10B981;font-family:JetBrains Mono,monospace;">{buy_parts:.4f}</div>',
+                f'<div style="padding-top:0.45rem;font-size:0.75rem;color:#10B981;font-family:JetBrains Mono,monospace;">Acheter: {buy_parts:.4f} parts</div>',
                 unsafe_allow_html=True,
             )
 
@@ -406,6 +411,14 @@ scenarios = {
 scenario_colors = {"Pessimiste (4%/an)": "#EF4444", "Modéré (7%/an)": "#F59E0B", "Optimiste (10%/an)": "#10B981"}
 
 if monthly_invest > 0:
+    # Use current portfolio value as initial principal (reflect real invested amount)
+    starting_value = 0.0
+    for r in st.session_state.etf_rows:
+        tk = r.get("ticker")
+        pr = prices_cache.get(tk, 0) or 0
+        shares = float(r.get("shares", 0) or 0)
+        starting_value += shares * pr
+
     fig3 = go.Figure()
     final_values = {}
     months = projection_years * 12
@@ -413,7 +426,7 @@ if monthly_invest > 0:
     for sc_name, annual_rate in scenarios.items():
         monthly_rate = (1 + annual_rate) ** (1/12) - 1
         values = []
-        cumul = 0.0
+        cumul = starting_value
         for m in range(months + 1):
             if m > 0:
                 cumul = (cumul + monthly_invest) * (1 + monthly_rate)
@@ -428,8 +441,8 @@ if monthly_invest > 0:
             hovertemplate="<b>" + sc_name + "</b><br>Année %{x:.1f}<br>Valeur: %{y:,.0f}€<extra></extra>",
         ))
 
-    # Capital investi line
-    invested_vals = [monthly_invest * m for m in range(months + 1)]
+    # Capital investi line (inclut starting capital)
+    invested_vals = [starting_value + monthly_invest * m for m in range(months + 1)]
     fig3.add_trace(go.Scatter(
         x=[m / 12 for m in range(months + 1)], y=invested_vals,
         name="Capital investi",
@@ -448,22 +461,21 @@ if monthly_invest > 0:
     st.plotly_chart(fig3, use_container_width=True)
 
     # Scenario summary cards
-    total_invested_final = monthly_invest * months
+    total_invested_final = starting_value + monthly_invest * months
     sc_cols = st.columns(3)
     for idx_s, (sc_name, sc_val) in enumerate(final_values.items()):
         gain = sc_val - total_invested_final
         gain_pct = (gain / total_invested_final * 100) if total_invested_final > 0 else 0
         color = list(scenario_colors.values())[idx_s]
         with sc_cols[idx_s]:
-            st.markdown(
-                '<div style="background:#1A1F2E;border-radius:12px;padding:1rem;text-align:center;border-top:3px solid ' + color + ';">'
-                '<div style="font-size:0.65rem;color:#4A5568;text-transform:uppercase;letter-spacing:0.1em;">' + sc_name + '</div>'
-                '<div style="font-size:1.3rem;font-weight:800;color:' + color + ';font-family:JetBrains Mono,monospace;margin-top:0.4rem;">' + fmt(sc_val, ccy, rates) + '</div>'
-                '<div style="font-size:0.72rem;color:#8892AA;margin-top:0.3rem;">+' + fmt(gain, ccy, rates) + ' (' + f'{gain_pct:+.1f}' + '%)</div>'
-                '<div style="font-size:0.6rem;color:#4A5568;margin-top:0.3rem;">sur ' + fmt(total_invested_final, ccy, rates) + ' investi</div>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(f"""
+<div style="background:#1A1F2E;border-radius:12px;padding:1rem;text-align:center;border-top:3px solid {color};">
+  <div style="font-size:0.65rem;color:#4A5568;text-transform:uppercase;letter-spacing:0.1em;">{sc_name}</div>
+  <div style="font-size:1.3rem;font-weight:800;color:{color};font-family:JetBrains Mono,monospace;margin-top:0.4rem;">{fmt(sc_val, ccy, rates)}</div>
+  <div style="font-size:0.72rem;color:#8892AA;margin-top:0.3rem;">+{fmt(gain, ccy, rates)} ({gain_pct:+.1f}%)</div>
+  <div style="font-size:0.6rem;color:#4A5568;margin-top:0.3rem;">sur {fmt(total_invested_final, ccy, rates)} investi</div>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 sub_label("Scénarios probabilistes calibrés (historique Equity)")
