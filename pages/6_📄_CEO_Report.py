@@ -96,6 +96,9 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
         def pdf_safe(text: str) -> str:
             return str(text).replace("€", "EUR").encode("latin-1", errors="replace").decode("latin-1")
 
+        def pdf_money(value: float) -> str:
+            return pdf_safe(fmt(value, ccy, rates))
+
         class MONKPDF(FPDF):
 
             def header(self):
@@ -156,7 +159,7 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
         sz = "24" if len(fmt(net_worth, ccy, rates)) < 12 else "18"
         pdf.set_font("Helvetica", "B", int(sz))
         pdf.set_text_color(59, 130, 246)
-        pdf.cell(0, 10, pdf_safe(fmt(net_worth, ccy, rates)), ln=True)
+        pdf.cell(0, 10, pdf_money(net_worth), ln=True)
         pdf.ln(3)
 
         col1_x = 10
@@ -178,13 +181,13 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
             pdf.ln(3)
 
         two_col_metric(pdf,
-            "Épargne Cash", fmt(current_savings, ccy, rates),
-            "Portefeuille ETF", fmt(total_portfolio, ccy, rates))
+            "Épargne Cash", pdf_money(current_savings),
+            "Portefeuille ETF", pdf_money(total_portfolio))
         two_col_metric(pdf,
-            "Objectif Fortress", fmt(savings_goal, ccy, rates),
+            "Objectif Fortress", pdf_money(savings_goal),
             "Statut", "SÉCURISÉ" if current_savings >= savings_goal else "VULNÉRABLE")
         two_col_metric(pdf,
-            "Div. Annuels Estimés", fmt(total_annual_div, ccy, rates),
+            "Div. Annuels Estimés", pdf_money(total_annual_div),
             "Fin Monk Mode", monk_end_raw)
 
         # ── Finances ───────────────────────────────────────────────────────
@@ -224,9 +227,9 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
                 pdf.cell(45, 5.5, r["ticker"])
                 pdf.set_text_color(136, 146, 170)
                 pdf.cell(25, 5.5, f"{r['shares']:.2f}", align="R")
-                pdf.cell(35, 5.5, fmt(r["price"], ccy, rates), align="R")
+                pdf.cell(35, 5.5, pdf_money(r["price"]), align="R")
                 pdf.set_text_color(59, 130, 246)
-                pdf.cell(40, 5.5, fmt(val, ccy, rates), align="R")
+                pdf.cell(40, 5.5, pdf_money(val), align="R")
                 pdf.set_text_color(136, 146, 170)
                 pdf.cell(35, 5.5, f"{r['target_pct']:.0f}%", align="R")
                 pdf.ln()
@@ -234,15 +237,15 @@ if st.button("📄  Générer le rapport PDF", type="primary"):
             pdf.set_font("Helvetica", "B", 9)
             pdf.set_text_color(59, 130, 246)
             pdf.cell(105, 5.5, "TOTAL")
-            pdf.cell(40, 5.5, pdf_safe(fmt(total_portfolio, ccy, rates)), align="R")
+            pdf.cell(40, 5.5, pdf_money(total_portfolio), align="R")
             pdf.ln()
 
         # ── Dividends ─────────────────────────────────────────────────────
         if include_div and portfolio_rows:
             pdf.ln(3)
             h2(pdf, "Dividend Tracker (théorique)")
-            row(pdf, "Dividendes annuels estimés", fmt(total_annual_div, ccy, rates), (16, 185, 129))
-            row(pdf, "Dividendes mensuels estimes", fmt(total_annual_div / 12, ccy, rates), (16, 185, 129))
+            row(pdf, "Dividendes annuels estimés", pdf_money(total_annual_div), (16, 185, 129))
+            row(pdf, "Dividendes mensuels estimes", pdf_money(total_annual_div / 12), (16, 185, 129))
             pdf.set_font("Helvetica", "I", 7)
             pdf.set_text_color(74, 85, 104)
             pdf.multi_cell(0, 4, "Note: Ces ETFs sont ACC (accumulants). Ces chiffres representent la croissance implicite reinvestie dans le prix de part.")
