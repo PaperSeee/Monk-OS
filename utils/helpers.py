@@ -205,7 +205,6 @@ def render_modules_quick_menu(key_suffix: str = "default"):
         "📈 Equity Engine": "pages/2_📈_Equity_Engine.py",
         "🔮 Freedom Simulator": "pages/3_🔮_Freedom_Simulator.py",
         "🛡️ Sentinel": "pages/4_🛡️_Sentinel.py",
-        "📊 Data Input": "pages/5_📊_Data_Input.py",
         "📄 CEO Report": "pages/6_📄_CEO_Report.py",
         "🧾 Impôt ou Urgence": "pages/7_🧾_Poche_Impot.py",
     }
