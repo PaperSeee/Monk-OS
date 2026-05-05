@@ -489,53 +489,100 @@ else:
 st.divider()
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  AJUSTEMENT MANUEL DES PARTS DÉTENUES
+#  MES PARTS DÉTENUES — Interface simple d'édition
 # ══════════════════════════════════════════════════════════════════════════════
-sub_label("Parts détenues — Ajustement manuel (cadeaux, transferts, corrections)")
+sub_label("Mes parts détenues — Modification simple")
 
 st.markdown(
-    '<div style="font-size:0.74rem;color:#8892AA;margin-bottom:0.45rem;">'
-    'Modifie ici tes parts réelles par ETF. Cela met à jour la valorisation live et le patrimoine global.'
+    '<div style="font-size:0.74rem;color:#8892AA;margin-bottom:0.8rem;">'
+    'Modifie le nombre de parts que tu possèdes réellement. Clique "Sauvegarder" et ton patrimoine se met à jour.'
     '</div>',
     unsafe_allow_html=True,
 )
 
-manual_parts = {}
+# Build current holdings data
+holdings_data = []
 for i, r in enumerate(st.session_state.etf_rows):
     tk = r["ticker"]
     pr = float(prices_cache.get(tk, 0) or 0)
-    cols = st.columns([2.2, 1.2, 1.4])
-    with cols[0]:
-        st.markdown(
-            '<div style="padding-top:0.55rem;font-size:0.82rem;color:#F0F4FF;font-family:JetBrains Mono,monospace;">'
-            + tk +
-            '</div>',
-            unsafe_allow_html=True,
-        )
-    with cols[1]:
-        manual_parts[tk] = st.number_input(
-            f"Parts réelles {tk}",
-            min_value=0.0,
-            value=float(r.get("shares", 0) or 0),
-            step=0.0001,
-            format="%.4f",
-            key=f"manual_real_parts_{i}",
-            label_visibility="collapsed",
-        )
-    with cols[2]:
-        live_val = manual_parts[tk] * pr if pr > 0 else 0.0
-        st.markdown(
-            '<div style="padding-top:0.55rem;font-size:0.78rem;color:#3B82F6;font-family:JetBrains Mono,monospace;">'
-            + (fmt(live_val, ccy, rates) if live_val > 0 else "N/A") +
-            '</div>',
-            unsafe_allow_html=True,
-        )
+    sh = float(r.get("shares", 0) or 0)
+    live_val = sh * pr if pr > 0 else 0.0
+    holdings_data.append({
+        "ticker": tk,
+        "price": pr,
+        "shares": sh,
+        "live_value": live_val,
+        "index": i,
+    })
 
-if st.button("💾 Mettre à jour mes parts", key="save_manual_parts", use_container_width=False):
+# Display holdings table
+st.markdown("""
+<div style="display:flex; gap:0; font-size:0.65rem; color:#4A5568;
+            letter-spacing:0.1em; text-transform:uppercase; padding:0 0.3rem; margin-bottom:0.4rem;">
+    <span style="flex:1.2; font-weight:600;">Ticker</span>
+    <span style="flex:1.2; font-weight:600;">Prix €/part</span>
+    <span style="flex:1.5; font-weight:600;">Parts (éditable)</span>
+    <span style="flex:1.5; font-weight:600;">Valeur €</span>
+</div>
+""", unsafe_allow_html=True)
+
+# Edit form
+with st.form(key="holdings_form"):
+    edited_parts = {}
+    for hd in holdings_data:
+        tk = hd["ticker"]
+        pr = hd["price"]
+        current_sh = hd["shares"]
+        
+        col_ticker, col_price, col_shares, col_value = st.columns([1.2, 1.2, 1.5, 1.5])
+        
+        with col_ticker:
+            st.markdown(
+                f'<div style="padding-top:0.75rem; font-size:0.85rem; color:#F0F4FF; '
+                f'font-family:JetBrains Mono,monospace; font-weight:600;">{tk}</div>',
+                unsafe_allow_html=True,
+            )
+        
+        with col_price:
+            price_display = fmt(pr, ccy, rates) if pr > 0 else "N/A"
+            st.markdown(
+                f'<div style="padding-top:0.75rem; font-size:0.82rem; color:#8892AA; '
+                f'font-family:JetBrains Mono,monospace;">{price_display}</div>',
+                unsafe_allow_html=True,
+            )
+        
+        with col_shares:
+            new_shares = st.number_input(
+                f"Parts {tk}",
+                min_value=0.0,
+                value=float(current_sh),
+                step=0.0001,
+                format="%.4f",
+                key=f"edit_parts_{hd['index']}",
+                label_visibility="collapsed",
+            )
+            edited_parts[tk] = float(new_shares)
+        
+        with col_value:
+            new_value = float(new_shares) * pr if pr > 0 else 0.0
+            value_display = fmt(new_value, ccy, rates) if new_value > 0 else "—"
+            st.markdown(
+                f'<div style="padding-top:0.75rem; font-size:0.82rem; color:#3B82F6; '
+                f'font-family:JetBrains Mono,monospace; font-weight:600;">{value_display}</div>',
+                unsafe_allow_html=True,
+            )
+    
+    # Submit button
+    st.markdown("<div style='margin-top:0.8rem;'></div>", unsafe_allow_html=True)
+    submitted = st.form_submit_button("💾 Sauvegarder mes parts", use_container_width=True)
+
+if submitted:
+    # Update session state
     for i, r in enumerate(st.session_state.etf_rows):
         tk = r["ticker"]
-        r["shares"] = float(manual_parts.get(tk, r.get("shares", 0) or 0))
-
+        r["shares"] = edited_parts.get(tk, r.get("shares", 0))
+    
+    # Save to database
     db_rows = [
         {
             "ticker": r["ticker"],
@@ -546,7 +593,13 @@ if st.button("💾 Mettre à jour mes parts", key="save_manual_parts", use_conta
         for r in st.session_state.etf_rows
     ]
     save_portfolio_v2(db_rows)
-    st.success("✓ Parts détenues mises à jour. Le patrimoine live est synchronisé.")
+    
+    # Calculate updated patrimoine
+    from db.database import get_finances
+    finances = get_finances()
+    new_patrimoine = float(finances.get("patrimoine_total", 0))
+    
+    st.success(f"✓ Parts sauvegardées ! Patrimoine : {fmt(new_patrimoine, ccy, rates)}")
     st.rerun()
 
 st.divider()
