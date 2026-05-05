@@ -495,8 +495,11 @@ with st.expander("⚙  Paramètres Fortress", expanded=False):
         except Exception:
             current_end = date(2026, 4, 9)
         new_end = st.date_input("Date fin Monk Mode", value=current_end)
-    manual_sav = st.number_input("Épargne actuelle (€) — Override manuel",
-                                  min_value=0.0, value=current_savings, step=50.0)
+    manual_sav = st.number_input(
+        "Épargne actuelle (€) — Override manuel",
+        value=float(current_savings),
+        step=50.0,
+    )
     if st.button("💾  Sauvegarder"):
         set_setting("savings_goal", new_goal)
         set_setting("monk_mode_end_date", new_end.isoformat())

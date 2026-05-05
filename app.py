@@ -52,10 +52,11 @@ with st.sidebar:
     # Branding — APP LOGO
     if st.button("", key="logo_home", use_container_width=True, help="Retour au dashboard"):
         st.rerun()
-    
+
+    st.markdown('<div style="padding:0.4rem 0 0.2rem 0; border-bottom:1px solid #232836;">', unsafe_allow_html=True)
+    st.image("assets/monk_logo.svg", use_container_width=True)
     st.markdown("""
-    <div style="padding:0.9rem 0 0.6rem 0; text-align:center; border-bottom:1px solid #232836;">
-        <img src="assets/monk_logo.svg" alt="MONK-OS" style="width:100%; max-width:220px; height:auto; filter: drop-shadow(0 10px 20px rgba(7,13,25,0.46));" />
+    <div style="text-align:center; padding-bottom:0.45rem;">
         <div style="font-size:0.56rem; color:#5DA8FF; letter-spacing:0.28em;
                     text-transform:uppercase; margin-top:0.3rem; font-weight:700;">
             Life & Wealth OS
@@ -65,6 +66,7 @@ with st.sidebar:
                          border-radius:20px; font-size:0.62rem; font-weight:600;
                          letter-spacing:0.06em;">● LIVE CORE</span>
         </div>
+    </div>
     </div>
     """, unsafe_allow_html=True)
 

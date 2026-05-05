@@ -236,12 +236,14 @@ def render_modules_quick_menu(key_suffix: str = "default"):
 def render_long_term_sidebar_nav(key_suffix: str = "default"):
     """Render shared sidebar nav for long-term module pages."""
     with st.sidebar:
+        st.markdown('<div style="padding:0.4rem 0 0.2rem 0; border-bottom:1px solid #232836;">', unsafe_allow_html=True)
+        st.image("assets/monk_logo.svg", use_container_width=True)
         st.markdown("""
-        <div style="padding:0.9rem 0 1rem 0; text-align:center; border-bottom:1px solid #232836;">
-            <img src="assets/monk_logo.svg" alt="MONK-OS" style="width:100%; max-width:210px; height:auto; filter: drop-shadow(0 8px 18px rgba(6,12,22,0.42));" />
+        <div style="text-align:center; padding-bottom:0.5rem;">
             <div style="font-size:0.56rem; color:#5DA8FF; letter-spacing:0.26em; text-transform:uppercase; margin-top:0.32rem; font-weight:700;">
                 Fortress Stack
             </div>
+        </div>
         </div>
         """, unsafe_allow_html=True)
 
