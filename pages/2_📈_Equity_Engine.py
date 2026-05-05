@@ -253,23 +253,36 @@ else:
 st.divider()
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  SYNTHÈSE DE L'ALLOCATION
+#  SYNTHÈSE DE L'ALLOCATION — Répartition actuelle du portefeuille
 # ══════════════════════════════════════════════════════════════════════════════
-sub_label("Synthèse de l'allocation mensuelle")
+sub_label("Synthèse de l'allocation — Répartition actuelle")
 
-total_eur = invest_amount_eur
+# Calculate current portfolio value and allocation
+portfolio_total_value = 0.0
+portfolio_holdings = []
 
-if total_eur > 0:
+for idx, r in enumerate(st.session_state.etf_rows):
+    tk = r["ticker"]
+    shares = float(r.get("shares", 0) or 0)
+    price = float(prices_cache.get(tk, 0) or 0)
+    value = shares * price
+    portfolio_total_value += value
+    if shares > 0:
+        portfolio_holdings.append({
+            "ticker": tk,
+            "shares": shares,
+            "price": price,
+            "value": value,
+            "color": palette[idx % len(palette)]
+        })
+
+if portfolio_total_value > 0 and portfolio_holdings:
     col_donut, col_summary = st.columns([1.3, 1])
 
     with col_donut:
-        chart_labels, chart_values, chart_colors = [], [], []
-        for idx, r in enumerate(st.session_state.etf_rows):
-            alloc = total_eur * (r["target_pct"] / 100)
-            if alloc > 0:
-                chart_labels.append(r["ticker"])
-                chart_values.append(alloc)
-                chart_colors.append(palette[idx % len(palette)])
+        chart_labels = [h["ticker"] for h in portfolio_holdings]
+        chart_values = [h["value"] for h in portfolio_holdings]
+        chart_colors = [h["color"] for h in portfolio_holdings]
 
         fig = go.Figure()
         fig.add_trace(go.Pie(
@@ -288,7 +301,7 @@ if total_eur > 0:
                         bgcolor="rgba(0,0,0,0)",
                         x=0.5, y=-0.18, xanchor="center", orientation="h"),
             annotations=[dict(
-                text=f"<b>{fmt(total_eur, ccy, rates)}</b><br><span style='font-size:10px;color:#4A5568'>/ mois</span>",
+                text=f"<b>{fmt(portfolio_total_value, ccy, rates)}</b><br><span style='font-size:10px;color:#4A5568'>Portefeuille</span>",
                 x=0.5, y=0.5,
                 font=dict(size=16, color="#F0F4FF", family="JetBrains Mono"),
                 showarrow=False
@@ -299,69 +312,72 @@ if total_eur > 0:
     with col_summary:
         st.markdown("<br>", unsafe_allow_html=True)
         rows_html = ""
-        for r in st.session_state.etf_rows:
-            tk = r["ticker"]
-            pct = r["target_pct"]
-            alloc = total_eur * (pct / 100)
-            pr = prices_cache.get(tk, 0)
-            pts = alloc / pr if pr > 0 else 0
+        for h in portfolio_holdings:
+            tk = h["ticker"]
+            pct = (h["value"] / portfolio_total_value * 100) if portfolio_total_value > 0 else 0
             rows_html += (
                 '<div class="info-row">'
                 '<span class="info-key">'
                 '<span style="color:#F0F4FF;">' + tk + '</span>'
-                '<span style="color:#4A5568;font-size:0.65rem;margin-left:0.3rem;">(' + f'{pct:.0f}' + '%)</span>'
+                '<span style="color:#4A5568;font-size:0.65rem;margin-left:0.3rem;">(' + f'{pct:.1f}' + '%)</span>'
                 '</span>'
                 '<span style="font-size:0.78rem;font-family:JetBrains Mono,monospace;">'
-                '<span style="color:#3B82F6;font-weight:700;">' + fmt(alloc, ccy, rates) + '</span>'
-                '<span style="color:#4A5568;font-size:0.68rem;margin-left:0.3rem;"> · ' + f'{pts:.4f}' + ' parts</span>'
+                '<span style="color:#3B82F6;font-weight:700;">' + fmt(h["value"], ccy, rates) + '</span>'
+                '<span style="color:#4A5568;font-size:0.68rem;margin-left:0.3rem;"> · ' + f'{h["shares"]:.4f}' + ' parts</span>'
                 '</span>'
                 '</div>'
             )
 
         card_html = (
             '<div class="monk-card">'
-            '<div class="monk-card-title">Répartition mensuelle</div>'
+            '<div class="monk-card-title">Répartition actuelle</div>'
             + rows_html +
             '<div class="info-row" style="margin-top:0.5rem;border-top:1px solid #232836;padding-top:0.5rem;">'
-            '<span class="info-key">Total mensuel</span>'
-            '<span class="info-value" style="color:#10B981;">' + fmt(total_eur, ccy, rates) + '</span>'
+            '<span class="info-key">Portefeuille total</span>'
+            '<span class="info-value" style="color:#10B981;">' + fmt(portfolio_total_value, ccy, rates) + '</span>'
             '</div></div>'
         )
         st.markdown(card_html, unsafe_allow_html=True)
+else:
+    st.info("📊 Aucune position actuellement. Ajoute des parts pour voir ta répartition.")
 
 st.divider()
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  ETF RECAP CARDS — Prix live & investissement
+#  ETF RECAP CARDS — Prix live & positions actuelles
 # ══════════════════════════════════════════════════════════════════════════════
-sub_label("Récap par ETF — Prix live & investissement mensuel")
+sub_label("Récap par ETF — Prix live & positions actuelles")
 
-etf_cols = st.columns(len(st.session_state.etf_rows))
-for idx, r in enumerate(st.session_state.etf_rows):
-    tk = r["ticker"]
-    pct = r["target_pct"]
-    price = prices_cache.get(tk, 0)
-    alloc = total_eur * (pct / 100)
-    parts = alloc / price if price > 0 else 0
-    name = ETF_CATALOG.get(tk, tk)
-    color = palette[idx % len(palette)]
+active_rows = [r for r in st.session_state.etf_rows if float(r.get("shares", 0) or 0) > 0]
 
-    with etf_cols[idx]:
-        st.markdown(
-            '<div style="background:#1A1F2E;border-radius:12px;padding:1rem;border-left:3px solid ' + color + ';">'
-            '<div style="font-size:0.9rem;font-weight:700;color:#F0F4FF;font-family:JetBrains Mono,monospace;">' + tk + '</div>'
-            '<div style="font-size:0.62rem;color:#4A5568;margin-top:0.15rem;line-height:1.4;">' + name + '</div>'
-            '<div style="margin-top:0.8rem;">'
-            '<div style="font-size:0.6rem;color:#4A5568;text-transform:uppercase;letter-spacing:0.1em;">Prix live</div>'
-            '<div style="font-size:1.1rem;font-weight:700;color:#F0F4FF;font-family:JetBrains Mono,monospace;">' + fmt(price, ccy, rates) + '</div>'
-            '</div>'
-            '<div style="margin-top:0.6rem;">'
-            '<div style="font-size:0.6rem;color:#4A5568;text-transform:uppercase;letter-spacing:0.1em;">Allocation (' + f'{pct:.0f}' + '%)</div>'
-            '<div style="font-size:0.95rem;font-weight:700;color:' + color + ';font-family:JetBrains Mono,monospace;">' + fmt(alloc, ccy, rates) + '</div>'
-            '<div style="font-size:0.72rem;color:#8892AA;font-family:JetBrains Mono,monospace;">' + f'{parts:.4f}' + ' parts</div>'
-            '</div></div>',
-            unsafe_allow_html=True,
-        )
+if active_rows:
+    etf_cols = st.columns(len(active_rows))
+    for idx, r in enumerate(active_rows):
+        tk = r["ticker"]
+        shares = float(r.get("shares", 0) or 0)
+        price = float(prices_cache.get(tk, 0) or 0)
+        value = shares * price
+        name = ETF_CATALOG.get(tk, tk)
+        color = palette[idx % len(palette)]
+
+        with etf_cols[idx]:
+            st.markdown(
+                '<div style="background:#1A1F2E;border-radius:12px;padding:1rem;border-left:3px solid ' + color + ';">'
+                '<div style="font-size:0.9rem;font-weight:700;color:#F0F4FF;font-family:JetBrains Mono,monospace;">' + tk + '</div>'
+                '<div style="font-size:0.62rem;color:#4A5568;margin-top:0.15rem;line-height:1.4;">' + name + '</div>'
+                '<div style="margin-top:0.8rem;">'
+                '<div style="font-size:0.6rem;color:#4A5568;text-transform:uppercase;letter-spacing:0.1em;">Prix live</div>'
+                '<div style="font-size:1.1rem;font-weight:700;color:#F0F4FF;font-family:JetBrains Mono,monospace;">' + fmt(price, ccy, rates) + '</div>'
+                '</div>'
+                '<div style="margin-top:0.6rem;">'
+                '<div style="font-size:0.6rem;color:#4A5568;text-transform:uppercase;letter-spacing:0.1em;">Parts détenues</div>'
+                '<div style="font-size:0.95rem;font-weight:700;color:' + color + ';font-family:JetBrains Mono,monospace;">' + f'{shares:.4f}' + '</div>'
+                '<div style="font-size:0.72rem;color:#8892AA;font-family:JetBrains Mono,monospace;">' + fmt(value, ccy, rates) + '</div>'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+else:
+    st.info("Aucune position active. Ajoute des parts dans la section d'édition ci-dessus.")
 
 st.divider()
 
