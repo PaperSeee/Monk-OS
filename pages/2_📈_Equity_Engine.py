@@ -594,12 +594,13 @@ if submitted:
     ]
     save_portfolio_v2(db_rows)
     
-    # Calculate updated patrimoine
-    from db.database import get_finances
-    finances = get_finances()
-    new_patrimoine = float(finances.get("patrimoine_total", 0))
+    # Calculate updated portfolio value from current holdings
+    new_portfolio_value = sum(
+        float(r.get("shares", 0) or 0) * float(prices_cache.get(r["ticker"], 0) or 0)
+        for r in st.session_state.etf_rows
+    )
     
-    st.success(f"✓ Parts sauvegardées ! Patrimoine : {fmt(new_patrimoine, ccy, rates)}")
+    st.success(f"✓ Parts sauvegardées ! Portefeuille : {fmt(new_portfolio_value, ccy, rates)}")
     st.rerun()
 
 st.divider()
