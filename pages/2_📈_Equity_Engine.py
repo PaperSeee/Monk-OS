@@ -489,6 +489,69 @@ else:
 st.divider()
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  AJUSTEMENT MANUEL DES PARTS DÉTENUES
+# ══════════════════════════════════════════════════════════════════════════════
+sub_label("Parts détenues — Ajustement manuel (cadeaux, transferts, corrections)")
+
+st.markdown(
+    '<div style="font-size:0.74rem;color:#8892AA;margin-bottom:0.45rem;">'
+    'Modifie ici tes parts réelles par ETF. Cela met à jour la valorisation live et le patrimoine global.'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+manual_parts = {}
+for i, r in enumerate(st.session_state.etf_rows):
+    tk = r["ticker"]
+    pr = float(prices_cache.get(tk, 0) or 0)
+    cols = st.columns([2.2, 1.2, 1.4])
+    with cols[0]:
+        st.markdown(
+            '<div style="padding-top:0.55rem;font-size:0.82rem;color:#F0F4FF;font-family:JetBrains Mono,monospace;">'
+            + tk +
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    with cols[1]:
+        manual_parts[tk] = st.number_input(
+            f"Parts réelles {tk}",
+            min_value=0.0,
+            value=float(r.get("shares", 0) or 0),
+            step=0.0001,
+            format="%.4f",
+            key=f"manual_real_parts_{i}",
+            label_visibility="collapsed",
+        )
+    with cols[2]:
+        live_val = manual_parts[tk] * pr if pr > 0 else 0.0
+        st.markdown(
+            '<div style="padding-top:0.55rem;font-size:0.78rem;color:#3B82F6;font-family:JetBrains Mono,monospace;">'
+            + (fmt(live_val, ccy, rates) if live_val > 0 else "N/A") +
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+if st.button("💾 Mettre à jour mes parts", key="save_manual_parts", use_container_width=False):
+    for i, r in enumerate(st.session_state.etf_rows):
+        tk = r["ticker"]
+        r["shares"] = float(manual_parts.get(tk, r.get("shares", 0) or 0))
+
+    db_rows = [
+        {
+            "ticker": r["ticker"],
+            "shares": float(r.get("shares", 0) or 0),
+            "price": float(prices_cache.get(r["ticker"], 0) or 0),
+            "target_pct": float(r.get("target_pct", 0) or 0),
+        }
+        for r in st.session_state.etf_rows
+    ]
+    save_portfolio_v2(db_rows)
+    st.success("✓ Parts détenues mises à jour. Le patrimoine live est synchronisé.")
+    st.rerun()
+
+st.divider()
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  JOURNAL D'INVESTISSEMENT MENSUEL
 # ══════════════════════════════════════════════════════════════════════════════
 sub_label("Journal d'investissement — Log tes achats mensuels")

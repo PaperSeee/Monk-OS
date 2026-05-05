@@ -495,7 +495,27 @@ def get_latest_portfolio_total_value() -> float:
 
 
 def get_portfolio_holdings() -> dict:
-    """Returns total parts held per ticker from all monthly investments."""
+    """Returns total parts held per ticker.
+
+    Priority order:
+    1) Latest manual holdings snapshot from portfolio_v2 (source of truth for current parts)
+    2) Aggregated parts from monthly_investments history (fallback)
+    """
+    latest = get_latest_portfolio_v2()
+    if latest:
+        out = {}
+        for r in latest:
+            ticker = r.get("ticker")
+            shares = float(r.get("shares", 0) or 0)
+            price = float(r.get("price", 0) or 0)
+            if ticker:
+                out[ticker] = {
+                    "parts": shares,
+                    "invested": shares * price,
+                }
+        if out:
+            return out
+
     conn = get_connection()
     rows = conn.execute(
         "SELECT ticker, SUM(parts) as total_parts, SUM(amount_eur) as total_invested "
