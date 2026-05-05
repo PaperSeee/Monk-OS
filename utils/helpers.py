@@ -237,10 +237,10 @@ def render_long_term_sidebar_nav(key_suffix: str = "default"):
     """Render shared sidebar nav for long-term module pages."""
     with st.sidebar:
         st.markdown("""
-        <div style="padding:1rem 0; text-align:center; border-bottom:1px solid #232836;">
-            <div style="font-size:1rem; font-weight:800; color:#F0F4FF;
-                        letter-spacing:-0.02em; font-family:'JetBrains Mono',monospace;">
-                MONK-OS v3
+        <div style="padding:0.9rem 0 1rem 0; text-align:center; border-bottom:1px solid #232836;">
+            <img src="assets/monk_logo.svg" alt="MONK-OS" style="width:100%; max-width:210px; height:auto; filter: drop-shadow(0 8px 18px rgba(6,12,22,0.42));" />
+            <div style="font-size:0.56rem; color:#5DA8FF; letter-spacing:0.26em; text-transform:uppercase; margin-top:0.32rem; font-weight:700;">
+                Fortress Stack
             </div>
         </div>
         """, unsafe_allow_html=True)

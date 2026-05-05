@@ -16,7 +16,7 @@ from utils.helpers import inject_css, section_head, sub_label, plotly_theme, fmt
 
 st.set_page_config(
     page_title="MONK-OS : Data Input",
-    page_icon="📊",
+    page_icon="assets/monk_favicon.svg",
     layout="wide",
 )
 

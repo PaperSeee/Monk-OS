@@ -22,7 +22,7 @@ from utils.helpers import (
 
 st.set_page_config(
     page_title="MONK-OS : Equity Engine",
-    page_icon="📈",
+    page_icon="assets/monk_favicon.svg",
     layout="wide",
 )
 
@@ -412,15 +412,19 @@ scenarios = {
 }
 scenario_colors = {"Pessimiste (4%/an)": "#EF4444", "Modéré (7%/an)": "#F59E0B", "Optimiste (10%/an)": "#10B981"}
 
-# Compute starting capital from current holdings
-starting_value = 0.0
+# Compute starting capital from current holdings.
+# If live prices are unavailable, fallback to historical invested amount.
+starting_value_live = 0.0
 for r in st.session_state.etf_rows:
     tk = r.get("ticker")
     pr = prices_cache.get(tk, 0) or 0
     shares = float(r.get("shares", 0) or 0)
-    starting_value += shares * pr
+    if pr > 0 and shares > 0:
+        starting_value_live += shares * pr
 
-# Only render projection if there is a meaningful starting capital or monthly contributions
+starting_value = starting_value_live if starting_value_live > 0 else float(get_total_invested_all_time())
+
+# Render projection as soon as we have a starting value or monthly contribution.
 if starting_value > 0 or monthly_invest > 0:
     fig3 = go.Figure()
     final_values = {}
@@ -479,6 +483,8 @@ if starting_value > 0 or monthly_invest > 0:
   <div style="font-size:0.6rem;color:#4A5568;margin-top:0.3rem;">sur {fmt(total_invested_final, ccy, rates)} investi</div>
 </div>
 """, unsafe_allow_html=True)
+else:
+        st.info("Aucune valeur investie détectée. Renseigne tes parts détenues ou active le DCA pour voir la projection.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 sub_label("Scénarios probabilistes calibrés (historique Equity)")

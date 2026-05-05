@@ -13,7 +13,7 @@ from utils.helpers import inject_css, section_head, sub_label, render_long_term_
 
 st.set_page_config(
     page_title="MONK-OS : Sentinel",
-    page_icon="🛡️",
+    page_icon="assets/monk_favicon.svg",
     layout="wide",
 )
 

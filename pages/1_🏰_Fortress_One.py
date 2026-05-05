@@ -26,7 +26,7 @@ from utils.helpers import inject_css, section_head, sub_label, fmt, get_fx_rates
 
 st.set_page_config(
     page_title="MONK-OS : Fortress One",
-    page_icon="🏰",
+    page_icon="assets/monk_favicon.svg",
     layout="wide",
 )
 

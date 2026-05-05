@@ -30,7 +30,7 @@ from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, 
 
 st.set_page_config(
     page_title="MONK-OS : MT — Trading & Prop Firms",
-    page_icon="📈",
+    page_icon="assets/monk_favicon.svg",
     layout="wide",
 )
 

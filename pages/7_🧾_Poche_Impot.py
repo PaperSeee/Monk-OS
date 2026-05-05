@@ -30,7 +30,7 @@ from utils.helpers import (
 
 st.set_page_config(
     page_title="MONK-OS : Impôt ou Urgence",
-    page_icon="🧾",
+    page_icon="assets/monk_favicon.svg",
     layout="wide",
 )
 

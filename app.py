@@ -33,7 +33,7 @@ from utils.helpers import inject_css, TIMEZONES, CURRENCY_SYMBOLS, get_now_str, 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="MONK-OS : Life & Wealth OS — Dashboard Central",
-    page_icon="▣",
+    page_icon="assets/monk_favicon.svg",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -54,20 +54,16 @@ with st.sidebar:
         st.rerun()
     
     st.markdown("""
-    <div style="padding:1.2rem 0 0.5rem 0; text-align:center; border-bottom:1px solid #232836;">
-        <div style="font-size:3rem; margin-bottom:0.5rem;">▧</div>
-        <div style="font-size:1.1rem; font-weight:800; color:#F0F4FF;
-                    letter-spacing:-0.02em; font-family:'JetBrains Mono',monospace;">
-            MONK-OS
+    <div style="padding:0.9rem 0 0.6rem 0; text-align:center; border-bottom:1px solid #232836;">
+        <img src="assets/monk_logo.svg" alt="MONK-OS" style="width:100%; max-width:220px; height:auto; filter: drop-shadow(0 10px 20px rgba(7,13,25,0.46));" />
+        <div style="font-size:0.56rem; color:#5DA8FF; letter-spacing:0.28em;
+                    text-transform:uppercase; margin-top:0.3rem; font-weight:700;">
+            Life & Wealth OS
         </div>
-        <div style="font-size:0.55rem; color:#3B82F6; letter-spacing:0.3em;
-                    text-transform:uppercase; margin-top:0.2rem; font-weight:700;">
-            Life & Wealth
-        </div>
-        <div style="margin-top:0.6rem;">
-            <span style="background:#1E3A5F; color:#3B82F6; padding:0.2rem 0.7rem;
+        <div style="margin-top:0.52rem;">
+            <span style="background:#1E3A5F; color:#6BC8FF; padding:0.2rem 0.72rem;
                          border-radius:20px; font-size:0.62rem; font-weight:600;
-                         letter-spacing:0.05em;">● LIVE</span>
+                         letter-spacing:0.06em;">● LIVE CORE</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
