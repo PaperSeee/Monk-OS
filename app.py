@@ -96,14 +96,19 @@ crypto_prices = live_prices(crypto_syms) if wallet else {}
 fx = usd_eur()
 crypto_lines = []
 crypto_total = 0.0
+crypto_warns = []
 for w in wallet:
     coin, qty = w["coin"], w["qty"]
     sym = yf_symbol(coin)
-    if sym is None:  # stablecoin en USD → EUR
+    if sym is None:  # stablecoin (USDT/USDC/DAI/BUSD) : ≈ 1 USD → converti en EUR
         val = qty * fx
     else:
-        px = crypto_prices.get(sym, 0)
-        val = qty * px
+        px = crypto_prices.get(sym)
+        if px:
+            val = qty * px
+        else:
+            val = 0.0
+            crypto_warns.append(coin)  # cours indisponible pour l'instant
     crypto_total += val
     crypto_lines.append({"coin": coin, "qty": qty, "val": val})
 
@@ -176,27 +181,41 @@ if crypto_lines:
     )
     st.markdown('<div class="sec-label">Répartition crypto</div>', unsafe_allow_html=True)
     st.plotly_chart(donut, use_container_width=True, config={"displayModeBar": False})
+    if crypto_warns:
+        st.caption(f"⚠️ Cours momentanément indisponible pour : {', '.join(crypto_warns)} "
+                   "(valeur à 0 le temps que Yahoo Finance réponde — rafraîchis dans 1 min).")
 
-# ── ÉVOLUTION DU PATRIMOINE ──────────────────────────────────────────────────
+# ── ÉVOLUTION DU PATRIMOINE (total : épargne + bourse + crypto) ──────────────
+st.markdown('<div class="sec-label">Évolution du patrimoine</div>', unsafe_allow_html=True)
 if len(history) >= 2:
-    st.markdown('<div class="sec-label">Évolution du patrimoine</div>', unsafe_allow_html=True)
     xs = [h["month_key"] for h in history]
     fig_h = go.Figure()
-    fig_h.add_trace(go.Scatter(
-        x=xs, y=[h["total"] for h in history], name="Total", mode="lines+markers",
-        line=dict(color="#6ba7ff", width=2.5),
-        fill="tozeroy", fillcolor="rgba(107,167,255,0.08)",
-        marker=dict(size=5),
-    ))
+    # Aire empilée par classe d'actif → on voit d'où vient la croissance
+    fig_h.add_trace(go.Scatter(x=xs, y=[h["epargne"] for h in history], name="Épargne",
+                               mode="lines", line=dict(width=0), stackgroup="w",
+                               fillcolor="rgba(107,167,255,0.35)"))
+    fig_h.add_trace(go.Scatter(x=xs, y=[h["bourse"] for h in history], name="Bourse",
+                               mode="lines", line=dict(width=0), stackgroup="w",
+                               fillcolor="rgba(62,207,142,0.35)"))
+    fig_h.add_trace(go.Scatter(x=xs, y=[h["crypto"] for h in history], name="Crypto",
+                               mode="lines", line=dict(width=0), stackgroup="w",
+                               fillcolor="rgba(247,147,26,0.35)"))
+    fig_h.add_trace(go.Scatter(x=xs, y=[h["total"] for h in history], name="Total",
+                               mode="lines+markers", line=dict(color="#f2f4f8", width=2.5),
+                               marker=dict(size=5)))
     fig_h.update_layout(
-        height=260, margin=dict(l=0, r=0, t=6, b=0),
+        height=280, margin=dict(l=0, r=0, t=6, b=0),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#9aa2b1", size=12), showlegend=False,
+        font=dict(color="#9aa2b1", size=12),
+        legend=dict(orientation="h", yanchor="bottom", y=1, xanchor="left", x=0),
         xaxis=dict(gridcolor="#1c1f26", zeroline=False),
         yaxis=dict(gridcolor="#1c1f26", zeroline=False, tickformat=",.0f", ticksuffix=" €"),
         hovermode="x unified",
     )
     st.plotly_chart(fig_h, use_container_width=True, config={"displayModeBar": False})
+else:
+    st.caption(f"Premier point enregistré ce mois-ci ({fmt(patrimoine)}). La courbe d'évolution "
+               "apparaîtra dès le mois prochain — un point est capturé automatiquement à chaque visite.")
 
 # ── ENCODAGE ─────────────────────────────────────────────────────────────────
 st.markdown('<div class="sec-label">Encoder</div>', unsafe_allow_html=True)
