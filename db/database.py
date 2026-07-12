@@ -167,6 +167,15 @@ def init_db():
         )
     """)
 
+    # Wallet crypto — avoirs par coin (snapshot manuel, prix live)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS crypto_wallet (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            coin    TEXT NOT NULL,
+            qty     REAL DEFAULT 0
+        )
+    """)
+
     # Fortress One — monthly manual savings history
     c.execute("""
         CREATE TABLE IF NOT EXISTS fortress_savings (
@@ -991,3 +1000,67 @@ def mark_tax_pocket_entry_paid(entry_id: int):
     )
     conn.commit()
     conn.close()
+
+
+# ── WALLET CRYPTO ────────────────────────────────────────────────────────────
+
+def get_crypto_wallet() -> list[dict]:
+    """Retourne les avoirs crypto : [{'coin': 'BTC', 'qty': 0.05}, ...]."""
+    conn = get_connection()
+    rows = conn.execute("SELECT coin, qty FROM crypto_wallet ORDER BY id").fetchall()
+    conn.close()
+    return [{"coin": r["coin"], "qty": float(r["qty"] or 0)} for r in rows]
+
+
+def save_crypto_wallet(rows: list[dict]):
+    """Remplace le wallet par les lignes données (coin, qty)."""
+    conn = get_connection()
+    conn.execute("DELETE FROM crypto_wallet")
+    for r in rows:
+        coin = (r.get("coin") or "").strip().upper()
+        qty = float(r.get("qty", 0) or 0)
+        if coin and qty > 0:
+            conn.execute("INSERT INTO crypto_wallet (coin, qty) VALUES (?, ?)", (coin, qty))
+    conn.commit()
+    conn.close()
+
+
+# ── HISTORIQUE PATRIMOINE (snapshots mensuels) ───────────────────────────────
+
+def record_wealth_snapshot(total: float, epargne: float, bourse: float, crypto: float):
+    """Enregistre (ou met à jour) le patrimoine du mois courant. 1 point / mois."""
+    conn = get_connection()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS wealth_history (
+            month_key TEXT PRIMARY KEY,
+            date      TEXT NOT NULL,
+            total     REAL DEFAULT 0,
+            epargne   REAL DEFAULT 0,
+            bourse    REAL DEFAULT 0,
+            crypto    REAL DEFAULT 0
+        )
+    """)
+    mk = date.today().strftime("%Y-%m")
+    conn.execute("""
+        INSERT INTO wealth_history (month_key, date, total, epargne, bourse, crypto)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(month_key) DO UPDATE SET
+            date=excluded.date, total=excluded.total,
+            epargne=excluded.epargne, bourse=excluded.bourse, crypto=excluded.crypto
+    """, (mk, date.today().isoformat(), total, epargne, bourse, crypto))
+    conn.commit()
+    conn.close()
+
+
+def get_wealth_history() -> list[dict]:
+    conn = get_connection()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS wealth_history (
+            month_key TEXT PRIMARY KEY, date TEXT NOT NULL,
+            total REAL DEFAULT 0, epargne REAL DEFAULT 0,
+            bourse REAL DEFAULT 0, crypto REAL DEFAULT 0
+        )
+    """)
+    rows = conn.execute("SELECT * FROM wealth_history ORDER BY month_key").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

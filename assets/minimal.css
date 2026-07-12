@@ -30,6 +30,8 @@ body{background:var(--bg);color:var(--ink)}
 
 /* Cartes de répartition */
 .alloc{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:1.4rem 0}
+.alloc-3{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:640px){.alloc-3{grid-template-columns:1fr}}
 .acard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
 .acard .lab{font-size:.72rem;font-weight:620;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;gap:7px}
 .acard .dot{width:8px;height:8px;border-radius:50%}
