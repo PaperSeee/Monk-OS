@@ -211,52 +211,54 @@ if patrimoine > 0:
         st.caption(f"⚠️ Cours momentanément indisponible pour : {', '.join(crypto_warns)} "
                    "(valeur à 0 le temps que Yahoo Finance réponde — rafraîchis dans 1 min).")
 
-# ── ÉVOLUTION DU PATRIMOINE (mois par mois) ──────────────────────────────────
-# Barres empilées par poche + total et variation au-dessus de chaque mois.
-# S'affiche dès le premier point : chaque mois ajoute une barre.
+# ── ÉVOLUTION DU PATRIMOINE (courbe mensuelle) ───────────────────────────────
+# 1 point par mois calendaire (month_key = clé primaire en base). Le point du
+# MOIS EN COURS est réécrit à chaque visite avec la valeur actuelle, puis se
+# fige quand le mois se termine — aucune gestion manuelle des mois.
 st.markdown('<div class="sec-label">Évolution du patrimoine</div>', unsafe_allow_html=True)
 if history:
     xs = [h["month_key"] for h in history]
     totals = [h["total"] for h in history]
 
-    # Variations mois par mois
-    deltas = [None] + [totals[i] - totals[i - 1] for i in range(1, len(totals))]
-
     fig_h = go.Figure()
-    fig_h.add_trace(go.Bar(x=xs, y=[h["epargne"] for h in history], name="Épargne",
-                           marker=dict(color="#6ba7ff", line=dict(width=0))))
-    fig_h.add_trace(go.Bar(x=xs, y=[h["bourse"] for h in history], name="Bourse · ETF",
-                           marker=dict(color="#3ecf8e", line=dict(width=0))))
-    fig_h.add_trace(go.Bar(x=xs, y=[h["crypto"] for h in history], name="Crypto",
-                           marker=dict(color="#f7931a", line=dict(width=0))))
-
-    # Annotation au-dessus de chaque barre : total, et delta vs mois précédent
-    annos = []
-    for i, (x, t, d) in enumerate(zip(xs, totals, deltas)):
-        if d is None:
-            txt = f"<b>{fmt(t)}</b>"
-        else:
-            col = "#3ecf8e" if d >= 0 else "#ff6b6b"
-            sign = "+" if d >= 0 else "−"
-            txt = f"<b>{fmt(t)}</b><br><span style='color:{col}'>{sign}{fmt(abs(d))}</span>"
-        annos.append(dict(x=x, y=t, text=txt, showarrow=False, yshift=26,
-                          font=dict(color="#f2f4f8", size=12)))
-
+    # Courbes fines par poche (désactivables via la légende)
+    for key, name, color in (("epargne", "Épargne", "#6ba7ff"),
+                             ("bourse", "Bourse · ETF", "#3ecf8e"),
+                             ("crypto", "Crypto", "#f7931a")):
+        fig_h.add_trace(go.Scatter(
+            x=xs, y=[h[key] for h in history], name=name, mode="lines",
+            line=dict(color=color, width=1.4, dash="dot"), opacity=0.75,
+        ))
+    # Courbe principale : le total
+    fig_h.add_trace(go.Scatter(
+        x=xs, y=totals, name="Total", mode="lines+markers",
+        line=dict(color="#f2f4f8", width=3, shape="spline", smoothing=0.6),
+        marker=dict(size=7, color="#f2f4f8"),
+        fill="tozeroy", fillcolor="rgba(242,244,248,0.05)",
+    ))
+    # Le point du mois en cours (dernier) : marqué "en cours", il bouge encore
+    fig_h.add_trace(go.Scatter(
+        x=[xs[-1]], y=[totals[-1]], mode="markers", showlegend=False,
+        marker=dict(size=13, color="rgba(107,167,255,0.25)",
+                    line=dict(color="#6ba7ff", width=2)),
+        hovertemplate=f"{xs[-1]} (en cours)<br>%{{y:,.0f}} €<extra></extra>",
+    ))
     fig_h.update_layout(
-        barmode="stack",
-        height=300, margin=dict(l=0, r=0, t=34, b=0),
+        height=300, margin=dict(l=0, r=0, t=30, b=0),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#9aa2b1", size=12),
-        legend=dict(orientation="h", yanchor="bottom", y=1.06, xanchor="left", x=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="left", x=0),
         xaxis=dict(gridcolor="#1c1f26", zeroline=False, type="category"),
-        yaxis=dict(gridcolor="#1c1f26", zeroline=False, tickformat=",.0f", ticksuffix=" €"),
-        bargap=0.35,
-        annotations=annos,
+        yaxis=dict(gridcolor="#1c1f26", zeroline=False, tickformat=",.0f",
+                   ticksuffix=" €", rangemode="tozero"),
         hovermode="x unified",
+        annotations=[dict(x=xs[-1], y=totals[-1], text="mois en cours",
+                          showarrow=False, yshift=22,
+                          font=dict(color="#6ba7ff", size=11))],
     )
     st.plotly_chart(fig_h, use_container_width=True, config={"displayModeBar": False})
 
-    # Stats sous le graphe : dernier mois + depuis le début
+    # Stats sous la courbe
     if len(totals) >= 2:
         s1, s2, s3 = st.columns(3)
         last_d = totals[-1] - totals[-2]
@@ -266,11 +268,12 @@ if history:
                   delta=f"{(first_d / totals[0] * 100):+.1f} %" if totals[0] else None)
         best_i = max(range(1, len(totals)), key=lambda i: totals[i] - totals[i - 1])
         s3.metric("Meilleur mois", xs[best_i], delta=fmt(totals[best_i] - totals[best_i - 1]))
-    else:
-        st.caption("Premier point enregistré — une barre s'ajoutera chaque mois, automatiquement à chaque visite.")
+
+    st.caption("Un point par mois. Le point du mois en cours se met à jour tout seul à chaque visite "
+               "(dernière valeur du mois), puis se fige quand le mois se termine.")
 else:
     st.caption(f"Premier point enregistré ce mois-ci ({fmt(patrimoine)}). "
-               "Une barre s'ajoutera chaque mois, automatiquement à chaque visite.")
+               "Un point s'ajoutera chaque mois, automatiquement à chaque visite.")
 
 # ── ENCODAGE ─────────────────────────────────────────────────────────────────
 st.markdown('<div class="sec-label">Encoder</div>', unsafe_allow_html=True)
