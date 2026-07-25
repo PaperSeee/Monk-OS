@@ -211,37 +211,66 @@ if patrimoine > 0:
         st.caption(f"⚠️ Cours momentanément indisponible pour : {', '.join(crypto_warns)} "
                    "(valeur à 0 le temps que Yahoo Finance réponde — rafraîchis dans 1 min).")
 
-# ── ÉVOLUTION DU PATRIMOINE (total : épargne + bourse + crypto) ──────────────
+# ── ÉVOLUTION DU PATRIMOINE (mois par mois) ──────────────────────────────────
+# Barres empilées par poche + total et variation au-dessus de chaque mois.
+# S'affiche dès le premier point : chaque mois ajoute une barre.
 st.markdown('<div class="sec-label">Évolution du patrimoine</div>', unsafe_allow_html=True)
-if len(history) >= 2:
+if history:
     xs = [h["month_key"] for h in history]
+    totals = [h["total"] for h in history]
+
+    # Variations mois par mois
+    deltas = [None] + [totals[i] - totals[i - 1] for i in range(1, len(totals))]
+
     fig_h = go.Figure()
-    # Aire empilée par classe d'actif → on voit d'où vient la croissance
-    fig_h.add_trace(go.Scatter(x=xs, y=[h["epargne"] for h in history], name="Épargne",
-                               mode="lines", line=dict(width=0), stackgroup="w",
-                               fillcolor="rgba(107,167,255,0.35)"))
-    fig_h.add_trace(go.Scatter(x=xs, y=[h["bourse"] for h in history], name="Bourse",
-                               mode="lines", line=dict(width=0), stackgroup="w",
-                               fillcolor="rgba(62,207,142,0.35)"))
-    fig_h.add_trace(go.Scatter(x=xs, y=[h["crypto"] for h in history], name="Crypto",
-                               mode="lines", line=dict(width=0), stackgroup="w",
-                               fillcolor="rgba(247,147,26,0.35)"))
-    fig_h.add_trace(go.Scatter(x=xs, y=[h["total"] for h in history], name="Total",
-                               mode="lines+markers", line=dict(color="#f2f4f8", width=2.5),
-                               marker=dict(size=5)))
+    fig_h.add_trace(go.Bar(x=xs, y=[h["epargne"] for h in history], name="Épargne",
+                           marker=dict(color="#6ba7ff", line=dict(width=0))))
+    fig_h.add_trace(go.Bar(x=xs, y=[h["bourse"] for h in history], name="Bourse · ETF",
+                           marker=dict(color="#3ecf8e", line=dict(width=0))))
+    fig_h.add_trace(go.Bar(x=xs, y=[h["crypto"] for h in history], name="Crypto",
+                           marker=dict(color="#f7931a", line=dict(width=0))))
+
+    # Annotation au-dessus de chaque barre : total, et delta vs mois précédent
+    annos = []
+    for i, (x, t, d) in enumerate(zip(xs, totals, deltas)):
+        if d is None:
+            txt = f"<b>{fmt(t)}</b>"
+        else:
+            col = "#3ecf8e" if d >= 0 else "#ff6b6b"
+            sign = "+" if d >= 0 else "−"
+            txt = f"<b>{fmt(t)}</b><br><span style='color:{col}'>{sign}{fmt(abs(d))}</span>"
+        annos.append(dict(x=x, y=t, text=txt, showarrow=False, yshift=26,
+                          font=dict(color="#f2f4f8", size=12)))
+
     fig_h.update_layout(
-        height=280, margin=dict(l=0, r=0, t=6, b=0),
+        barmode="stack",
+        height=300, margin=dict(l=0, r=0, t=34, b=0),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#9aa2b1", size=12),
-        legend=dict(orientation="h", yanchor="bottom", y=1, xanchor="left", x=0),
-        xaxis=dict(gridcolor="#1c1f26", zeroline=False),
+        legend=dict(orientation="h", yanchor="bottom", y=1.06, xanchor="left", x=0),
+        xaxis=dict(gridcolor="#1c1f26", zeroline=False, type="category"),
         yaxis=dict(gridcolor="#1c1f26", zeroline=False, tickformat=",.0f", ticksuffix=" €"),
+        bargap=0.35,
+        annotations=annos,
         hovermode="x unified",
     )
     st.plotly_chart(fig_h, use_container_width=True, config={"displayModeBar": False})
+
+    # Stats sous le graphe : dernier mois + depuis le début
+    if len(totals) >= 2:
+        s1, s2, s3 = st.columns(3)
+        last_d = totals[-1] - totals[-2]
+        first_d = totals[-1] - totals[0]
+        s1.metric("Ce mois vs précédent", fmt(totals[-1]), delta=fmt(last_d))
+        s2.metric(f"Depuis {xs[0]}", fmt(first_d),
+                  delta=f"{(first_d / totals[0] * 100):+.1f} %" if totals[0] else None)
+        best_i = max(range(1, len(totals)), key=lambda i: totals[i] - totals[i - 1])
+        s3.metric("Meilleur mois", xs[best_i], delta=fmt(totals[best_i] - totals[best_i - 1]))
+    else:
+        st.caption("Premier point enregistré — une barre s'ajoutera chaque mois, automatiquement à chaque visite.")
 else:
-    st.caption(f"Premier point enregistré ce mois-ci ({fmt(patrimoine)}). La courbe d'évolution "
-               "apparaîtra dès le mois prochain — un point est capturé automatiquement à chaque visite.")
+    st.caption(f"Premier point enregistré ce mois-ci ({fmt(patrimoine)}). "
+               "Une barre s'ajoutera chaque mois, automatiquement à chaque visite.")
 
 # ── ENCODAGE ─────────────────────────────────────────────────────────────────
 st.markdown('<div class="sec-label">Encoder</div>', unsafe_allow_html=True)
