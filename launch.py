@@ -1,47 +1,106 @@
 #!/usr/bin/env python3
 """
-MONK-OS Launcher — Launches the app as a native application
+MONK-OS Launcher — lance l'app de façon déterministe.
+
+Corrige les problèmes de démarrage :
+- tue toute ancienne instance qui bloque le port (cause du repli sur 8504/8505),
+- port FIXE (8503) — l'URL est donc toujours la même,
+- utilise le même interpréteur Python (sys.executable -m streamlit), donc pas
+  de dépendance à un `streamlit` présent ou non dans le PATH,
+- n'ouvre le navigateur qu'une fois le serveur réellement prêt.
 """
 
+import os
+import sys
+import time
+import socket
 import subprocess
 import webbrowser
-import time
-import sys
-import os
+from urllib.request import urlopen
+
+PORT = 8503
+URL = f"http://localhost:{PORT}"
+
+
+def port_is_open(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.4)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def kill_stale_instances(port: int):
+    """Tue tout process qui écoute déjà sur le port (ancienne instance MONK-OS)."""
+    try:
+        pids = subprocess.check_output(
+            ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
+            text=True,
+        ).split()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pids = []
+    for pid in pids:
+        try:
+            subprocess.run(["kill", pid], check=False)
+            print(f"   ↳ ancienne instance arrêtée (PID {pid})")
+        except Exception:
+            pass
+    if pids:
+        time.sleep(1.5)  # laisse le port se libérer
+
+
+def wait_until_ready(url: str, timeout: float = 25.0) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            urlopen(url, timeout=1)
+            return True
+        except Exception:
+            time.sleep(0.5)
+    return False
+
 
 def launch_app():
-    """Launch Streamlit app and open in browser"""
-    
-    # Get the app directory
     app_dir = os.path.dirname(os.path.abspath(__file__))
     app_file = os.path.join(app_dir, "app.py")
-    
+
     print("🚀 Lancement de MONK-OS...")
-    print("   localhost:8503 s'ouvrira automatiquement dans 3 secondes...\n")
-    
-    # Start Streamlit app
+
+    # 1. Nettoie toute instance déjà en cours sur le port.
+    if port_is_open(PORT):
+        print(f"   Port {PORT} occupé — nettoyage de l'ancienne instance...")
+        kill_stale_instances(PORT)
+
+    # 2. Démarre Streamlit avec le Python courant (indépendant du PATH).
     try:
-        # Launch Streamlit in a subprocess
         process = subprocess.Popen(
-            ["streamlit", "run", app_file, "--server.port", "8503", "--logger.level=error"],
+            [
+                sys.executable, "-m", "streamlit", "run", app_file,
+                "--server.port", str(PORT),
+                "--server.headless", "true",
+                "--logger.level=error",
+            ],
             cwd=app_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
         )
-        
-        # Wait a bit for server to start, then open browser
-        time.sleep(3)
-        webbrowser.open("http://localhost:8503")
-        
-        # Keep process running
+    except FileNotFoundError:
+        print("❌ Streamlit introuvable. Installe-le avec :")
+        print(f"   {sys.executable} -m pip install -r requirements.txt")
+        sys.exit(1)
+
+    # 3. Attend que le serveur réponde avant d'ouvrir le navigateur.
+    print(f"   En attente du serveur sur {URL} ...")
+    if wait_until_ready(URL):
+        print(f"   ✓ Prêt — ouverture de {URL}\n")
+        webbrowser.open(URL)
+    else:
+        print("   ⚠ Le serveur met du temps à démarrer. Ouvre manuellement :")
+        print(f"   {URL}\n")
+
+    try:
         process.wait()
     except KeyboardInterrupt:
-        print("\n\n✓ MONK-OS fermée")
+        process.terminate()
+        print("\n✓ MONK-OS fermée")
         sys.exit(0)
-    except FileNotFoundError:
-        print("❌ Erreur: Streamlit n'est pas installé")
-        print("   Installez-le avec: pip install streamlit")
-        sys.exit(1)
+
 
 if __name__ == "__main__":
     launch_app()

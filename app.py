@@ -264,52 +264,63 @@ with st.expander("₿  Wallet crypto"):
         st.success("Wallet crypto mis à jour.")
         st.rerun()
 
-# ── PROJECTION ───────────────────────────────────────────────────────────────
-st.markdown('<div class="sec-label">Projection</div>', unsafe_allow_html=True)
+# ── PROJECTION ETF ───────────────────────────────────────────────────────────
+# Projection sans aucun input : on part de la valeur ACTUELLE de tes ETF et on
+# la laisse composer, sans nouvel apport. Trois scénarios de rendement annuel
+# (prudent / moyen / optimiste) — uniquement la poche bourse ETF.
+st.markdown('<div class="sec-label">Projection ETF</div>', unsafe_allow_html=True)
 
-c1, c2, c3 = st.columns(3)
-apport = c1.number_input("Épargne mensuelle (€)", value=int(float(get_setting("proj_apport", 500))),
-                         min_value=0, step=50)
-rendement = c2.slider("Rendement annuel (%)", 0.0, 15.0,
-                      float(get_setting("proj_rendement", 7.0)), 0.5)
-annees = c3.slider("Horizon (années)", 1, 40, int(float(get_setting("proj_annees", 20))))
-set_setting("proj_apport", apport)
-set_setting("proj_rendement", rendement)
-set_setting("proj_annees", annees)
+base_etf = bourse_live  # valeur actuelle des ETF (hors épargne, hors crypto)
 
-r_m = rendement / 100 / 12
-mois = annees * 12
-serie_val, serie_verse = [], []
-val = patrimoine
-verse = patrimoine
-for m in range(mois + 1):
-    serie_val.append(val)
-    serie_verse.append(verse)
-    val = val * (1 + r_m) + apport
-    verse += apport
+if base_etf <= 0:
+    st.caption("Ajoute des positions ETF dans le portefeuille bourse pour voir la projection.")
+else:
+    st.caption(
+        f"À partir de tes **{fmt(base_etf)}** d'ETF aujourd'hui, sans nouvel apport — "
+        "ce que la seule capitalisation peut donner selon le rendement annuel moyen."
+    )
 
-final, total_verse = serie_val[-1], serie_verse[-1]
-interets = final - total_verse
-xs = [date.today().year + m / 12 for m in range(mois + 1)]
+    HORIZON = 30  # années projetées
+    SCENARIOS = [
+        ("Prudent", 5.0, "#616b7c"),
+        ("Moyen",   7.0, "#6ba7ff"),
+        ("Optimiste", 9.0, "#3ecf8e"),
+    ]
+    today_year = date.today().year
+    xs = list(range(today_year, today_year + HORIZON + 1))
 
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=xs, y=serie_verse, name="Versé", mode="lines",
-                         line=dict(color="#616b7c", width=1.5, dash="dot")))
-fig.add_trace(go.Scatter(x=xs, y=serie_val, name="Valeur projetée", mode="lines",
-                         line=dict(color="#6ba7ff", width=2.5),
-                         fill="tonexty", fillcolor="rgba(107,167,255,0.10)"))
-fig.update_layout(
-    height=300, margin=dict(l=0, r=0, t=10, b=0),
-    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color="#9aa2b1", size=12),
-    legend=dict(orientation="h", yanchor="bottom", y=1, xanchor="left", x=0),
-    xaxis=dict(gridcolor="#1c1f26", zeroline=False),
-    yaxis=dict(gridcolor="#1c1f26", zeroline=False, tickformat=",.0f", ticksuffix=" €"),
-    hovermode="x unified",
-)
-st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    fig = go.Figure()
+    series = {}
+    for name, rate, color in SCENARIOS:
+        ys = [base_etf * ((1 + rate / 100) ** y) for y in range(HORIZON + 1)]
+        series[name] = ys
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, name=f"{name} · {rate:.0f}%/an", mode="lines",
+            line=dict(color=color, width=2.5 if name == "Moyen" else 1.8,
+                      dash="solid" if name == "Moyen" else "dot"),
+            fill="tozeroy" if name == "Moyen" else None,
+            fillcolor="rgba(107,167,255,0.08)",
+        ))
+    fig.update_layout(
+        height=300, margin=dict(l=0, r=0, t=10, b=0),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#9aa2b1", size=12),
+        legend=dict(orientation="h", yanchor="bottom", y=1, xanchor="left", x=0),
+        xaxis=dict(gridcolor="#1c1f26", zeroline=False),
+        yaxis=dict(gridcolor="#1c1f26", zeroline=False, tickformat=",.0f", ticksuffix=" €"),
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-m1, m2, m3 = st.columns(3)
-m1.metric(f"Dans {annees} ans", fmt(final))
-m2.metric("Total versé", fmt(total_verse))
-m3.metric("Dont intérêts", fmt(interets))
+    # Ce que tu peux espérer (scénario moyen) à des horizons clés.
+    st.markdown('<div class="sec-label" style="margin-top:.5rem">Ce que tu peux espérer (scénario moyen · 7 %/an)</div>',
+                unsafe_allow_html=True)
+    cols = st.columns(4)
+    for col, h in zip(cols, (5, 10, 20, 30)):
+        val_h = base_etf * ((1 + 0.07) ** h)
+        col.metric(f"Dans {h} ans", fmt(val_h), delta=fmt(val_h - base_etf))
+
+    st.caption(
+        "Hypothèse : capitalisation à rendement constant, dividendes réinvestis, sans nouvel apport ni "
+        "impôt/inflation. Le passé ne garantit pas le futur — c'est un ordre de grandeur, pas une promesse."
+    )
