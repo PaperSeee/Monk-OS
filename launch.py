@@ -3,8 +3,8 @@
 MONK-OS Launcher — lance l'app de façon déterministe.
 
 Corrige les problèmes de démarrage :
-- tue toute ancienne instance qui bloque le port (cause du repli sur 8504/8505),
-- port FIXE (8503) — l'URL est donc toujours la même,
+- tue toute ancienne instance qui bloque le port,
+- port FIXE (8505) — l'URL est donc toujours la même,
 - utilise le même interpréteur Python (sys.executable -m streamlit), donc pas
   de dépendance à un `streamlit` présent ou non dans le PATH,
 - n'ouvre le navigateur qu'une fois le serveur réellement prêt.
@@ -18,7 +18,7 @@ import subprocess
 import webbrowser
 from urllib.request import urlopen
 
-PORT = 8503
+PORT = 8505
 URL = f"http://localhost:{PORT}"
 
 
