@@ -41,3 +41,4 @@ Thumbs.db
 
 # ── PDF Reports (générés localement) ─────────────────────────────────────────
 *.pdf
+snapshot.log
