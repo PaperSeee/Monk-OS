@@ -163,24 +163,50 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Répartition crypto détaillée (donut) ─────────────────────────────────────
-if crypto_lines:
-    labels = [c["coin"] for c in crypto_lines]
-    vals = [c["val"] for c in crypto_lines]
-    colors = [COIN_COLORS.get(c["coin"], "#6ba7ff") for c in crypto_lines]
-    donut = go.Figure(go.Pie(
-        labels=labels, values=vals, hole=0.62, marker=dict(colors=colors, line=dict(color="#0c0d10", width=2)),
-        textinfo="label+percent", textfont=dict(color="#f2f4f8", size=12),
-        hovertemplate="%{label}<br>%{value:,.0f} €<extra></extra>",
+# ── Répartition globale (sunburst : classes → détail) ────────────────────────
+# Anneau intérieur : Épargne / Bourse ETF / Crypto. Anneau extérieur : le
+# détail de chaque poche (cash, chaque ETF, chaque coin).
+if patrimoine > 0:
+    CLASS_COLORS = {"Épargne": "#6ba7ff", "Bourse · ETF": "#3ecf8e", "Crypto": "#f7931a"}
+    sb_labels, sb_parents, sb_values, sb_colors = [], [], [], []
+
+    def add(label, parent, value, color):
+        sb_labels.append(label); sb_parents.append(parent)
+        sb_values.append(max(value, 0)); sb_colors.append(color)
+
+    # Niveau 1 — les 3 poches
+    if epargne > 0:
+        add("Épargne", "", epargne, CLASS_COLORS["Épargne"])
+        add("Cash", "Épargne", epargne, "#8fc0ff")
+    if bourse_live > 0:
+        add("Bourse · ETF", "", bourse_live, CLASS_COLORS["Bourse · ETF"])
+        for tk, d in holdings.items():
+            px = etf_prices.get(tk)
+            v = d["parts"] * px if px else d["invested"]
+            if v > 0:
+                add(tk, "Bourse · ETF", v, "#6fe0ac")
+    if crypto_total > 0:
+        add("Crypto", "", crypto_total, CLASS_COLORS["Crypto"])
+        for c in crypto_lines:
+            if c["val"] > 0:
+                add(c["coin"], "Crypto", c["val"], COIN_COLORS.get(c["coin"], "#ffb45e"))
+
+    sun = go.Figure(go.Sunburst(
+        labels=sb_labels, parents=sb_parents, values=sb_values,
+        branchvalues="total",
+        marker=dict(colors=sb_colors, line=dict(color="#0c0d10", width=2)),
+        textinfo="label+percent root",
+        textfont=dict(color="#f2f4f8", size=13),
+        insidetextorientation="radial",
+        hovertemplate="%{label}<br>%{value:,.0f} € · %{percentRoot:.0%} du patrimoine<extra></extra>",
     ))
-    donut.update_layout(
-        height=250, margin=dict(l=0, r=0, t=6, b=0), showlegend=False,
+    sun.update_layout(
+        height=340, margin=dict(l=0, r=0, t=6, b=6),
         paper_bgcolor="rgba(0,0,0,0)",
-        annotations=[dict(text=f"<b>{fmt(crypto_total)}</b>", x=0.5, y=0.5,
-                          font=dict(color="#f2f4f8", size=17), showarrow=False)],
     )
-    st.markdown('<div class="sec-label">Répartition crypto</div>', unsafe_allow_html=True)
-    st.plotly_chart(donut, use_container_width=True, config={"displayModeBar": False})
+    st.markdown('<div class="sec-label">Répartition du patrimoine</div>', unsafe_allow_html=True)
+    st.plotly_chart(sun, use_container_width=True, config={"displayModeBar": False})
+    st.caption("Anneau intérieur : les 3 poches · anneau extérieur : le détail (clique une poche pour zoomer).")
     if crypto_warns:
         st.caption(f"⚠️ Cours momentanément indisponible pour : {', '.join(crypto_warns)} "
                    "(valeur à 0 le temps que Yahoo Finance réponde — rafraîchis dans 1 min).")
