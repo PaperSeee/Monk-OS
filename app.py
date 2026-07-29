@@ -4,6 +4,7 @@ Une seule page : vue du patrimoine · encodage · évolution · projection.
 Réutilise la base SQLite existante (aucune donnée perdue).
 """
 
+import math
 import streamlit as st
 import plotly.graph_objects as go
 from pathlib import Path
@@ -45,6 +46,19 @@ def fmt(v: float) -> str:
 
 
 # ── Prix live (ETF + crypto), cache 15 min ──────────────────────────────────
+def _last_valid_close(hist) -> float | None:
+    """Dernier cours de clôture NON-NaN. Yahoo renvoie souvent une bougie du
+    jour à NaN (marché ouvert / donnée pas encore consolidée) : on ignore ces
+    NaN et on prend le dernier prix réellement coté."""
+    try:
+        closes = hist["Close"].dropna()
+        if not closes.empty:
+            return float(closes.iloc[-1])
+    except Exception:
+        pass
+    return None
+
+
 @st.cache_data(ttl=900, show_spinner=False)
 def live_prices(symbols: tuple) -> dict:
     out = {}
@@ -54,9 +68,10 @@ def live_prices(symbols: tuple) -> dict:
             if not s:
                 continue
             try:
-                h = yf.Ticker(s).history(period="2d")
-                if not h.empty:
-                    out[s] = float(h["Close"].iloc[-1])
+                h = yf.Ticker(s).history(period="5d")
+                px = _last_valid_close(h)
+                if px is not None:
+                    out[s] = px
             except Exception:
                 pass
     except ImportError:
@@ -68,9 +83,10 @@ def live_prices(symbols: tuple) -> dict:
 def usd_eur() -> float:
     try:
         import yfinance as yf
-        h = yf.Ticker("EURUSD=X").history(period="2d")
-        if not h.empty:
-            return 1 / float(h["Close"].iloc[-1])
+        h = yf.Ticker("EURUSD=X").history(period="5d")
+        px = _last_valid_close(h)
+        if px:
+            return 1 / px
     except Exception:
         pass
     return 0.92  # fallback
@@ -87,7 +103,11 @@ bourse_invested = 0.0
 for tk, d in holdings.items():
     bourse_invested += d["invested"]
     px = etf_prices.get(tk)
-    bourse_live += d["parts"] * px if px else d["invested"]
+    # px valide = nombre fini et > 0 ; sinon repli sur le montant investi.
+    if isinstance(px, (int, float)) and math.isfinite(px) and px > 0:
+        bourse_live += d["parts"] * px
+    else:
+        bourse_live += d["invested"]
 
 # Crypto
 wallet = get_crypto_wallet()

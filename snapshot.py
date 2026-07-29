@@ -30,11 +30,16 @@ def yf_symbol(coin: str):
 
 
 def fetch_price(symbol: str):
+    """Dernier cours de clôture NON-NaN (Yahoo renvoie souvent la bougie du
+    jour à NaN tant que le marché n'a pas consolidé)."""
     try:
         import yfinance as yf
-        h = yf.Ticker(symbol).history(period="2d")
-        if not h.empty:
-            return float(h["Close"].iloc[-1])
+        h = yf.Ticker(symbol).history(period="5d")
+        closes = h["Close"].dropna()
+        if not closes.empty:
+            px = float(closes.iloc[-1])
+            if px > 0:
+                return px
     except Exception:
         pass
     return None
